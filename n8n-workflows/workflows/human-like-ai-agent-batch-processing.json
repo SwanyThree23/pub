@@ -1,0 +1,602 @@
+{
+  "name": "Human-Like AI Agent with Batch Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook-chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger - Chat Platform",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "chat-platform-webhook",
+      "notes": "Receives messages from WhatsApp, Telegram, or any chat platform"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "message-var",
+              "name": "message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            },
+            {
+              "id": "number-var",
+              "name": "number",
+              "value": "={{ $json.body.from.replace('whatsapp:', '') }}",
+              "type": "string"
+            },
+            {
+              "id": "platform-var",
+              "name": "platform",
+              "value": "={{ $json.body.platform || 'whatsapp' }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp-var",
+              "name": "timestamp",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-variables",
+      "name": "Set Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [450, 300],
+      "notes": "Standardizes message and user data across platforms"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTable": "chat_messages",
+        "columns": {
+          "mappings": [
+            {
+              "column": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "column": "number",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "column": "message_status",
+              "value": "in_queue"
+            },
+            {
+              "column": "platform",
+              "value": "={{ $json.platform }}"
+            },
+            {
+              "column": "timestamp",
+              "value": "={{ $json.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "insert-message-db",
+      "name": "Store Message in Data Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "notes": "Stores incoming messages for batch processing with low latency"
+    },
+    {
+      "parameters": {
+        "amount": 8,
+        "unit": "seconds"
+      },
+      "id": "wait-for-batch",
+      "name": "Wait for Batch Messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "webhookId": "batch-wait-webhook",
+      "notes": "Waits 8 seconds to collect multiple messages from user"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "dataTable": "chat_messages",
+        "filters": {
+          "conditions": [
+            {
+              "column": "message_status",
+              "condition": "equal",
+              "value": "in_queue"
+            },
+            {
+              "column": "number",
+              "condition": "equal",
+              "value": "={{ $json.number }}"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "fields": [
+              {
+                "column": "timestamp",
+                "direction": "ASC"
+              }
+            ]
+          }
+        }
+      },
+      "id": "get-queued-messages",
+      "name": "Get Queued Messages",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "notes": "Retrieves all queued messages for the current user"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-messages",
+      "name": "Loop Over Messages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1250, 300],
+      "notes": "Iterates through each message to update status"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTable": "chat_messages",
+        "id": "={{ $json.id }}",
+        "columns": {
+          "mappings": [
+            {
+              "column": "message_status",
+              "value": "processed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-message-status",
+      "name": "Update Message Status",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "notes": "Marks message as processed to prevent reprocessing"
+    },
+    {
+      "parameters": {
+        "operation": "aggregate",
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "done-looping",
+      "name": "Done Looping",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "notes": "Aggregates all processed messages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all messages from the batch into a single string\nconst items = $input.all();\nconst messages = items.map(item => item.json.message);\nconst mergedMessage = messages.join('. ');\nconst userNumber = items[0].json.number;\nconst platform = items[0].json.platform;\n\nreturn {\n  json: {\n    mergedMessage: mergedMessage,\n    number: userNumber,\n    platform: platform,\n    messageCount: messages.length\n  }\n};"
+      },
+      "id": "merge-messages",
+      "name": "Merge Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300],
+      "notes": "Combines all user messages into a single context for AI"
+    },
+    {
+      "parameters": {
+        "agent": "conversationalAgent",
+        "promptType": "define",
+        "text": "=You are a professional, empathetic AI assistant. Your name is Claude Assistant.\n\n**Your Core Behavior:**\n- You are helpful, knowledgeable, and conversational\n- You respond in a natural, human-like manner\n- You break down your responses into multiple short messages when appropriate\n- You use emojis naturally but not excessively\n- You maintain context from previous conversations\n\n**Response Format:**\nYou MUST output your response as a JSON object with between 1 and 3 messages. Default to fewer messages for simple responses.\n\nFormat:\n{\n  \"message1\": \"First part of your response\",\n  \"message2\": \"Second part (optional)\",\n  \"message3\": \"Third part (optional)\"\n}\n\n**Examples:**\n\nUser: \"Hey\"\nOutput:\n{\n  \"message1\": \"Hey there! 👋 How can I help you today?\"\n}\n\nUser: \"What's the weather like? And do you have any recommendations for today?\"\nOutput:\n{\n  \"message1\": \"Let me check the weather for you! ☀️\",\n  \"message2\": \"It's looking sunny and warm today, perfect for outdoor activities!\",\n  \"message3\": \"I'd recommend going for a walk in the park or trying that new café you mentioned before. What sounds good to you?\"\n}\n\n**Current User Message(s):**\n{{ $json.mergedMessage }}\n\n**Number of messages received:** {{ $json.messageCount }}\n\nRespond to ALL the user's questions/statements in your multi-message format.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are Claude Assistant, a helpful AI that communicates naturally through multiple short messages. Always output valid JSON with message1, message2 (optional), and message3 (optional) fields."
+        }
+      },
+      "id": "claude-ai-agent",
+      "name": "Claude AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [2050, 300],
+      "notes": "Claude AI processes messages with context and memory"
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "claude-chat-model",
+      "name": "Claude Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.7,
+      "position": [2050, 500],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-credentials",
+          "name": "Anthropic Claude API"
+        }
+      },
+      "notes": "Claude Sonnet 4.5 model for advanced reasoning"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.number }}",
+        "contextWindowLength": 10
+      },
+      "id": "simple-memory",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [2050, 700],
+      "notes": "Maintains conversation context per user"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse AI response and segregate into individual messages\nconst aiResponse = $input.first().json.output;\n\nlet parsedResponse;\ntry {\n  // Try to parse as JSON\n  parsedResponse = typeof aiResponse === 'string' ? JSON.parse(aiResponse) : aiResponse;\n} catch (error) {\n  // If parsing fails, create a single message\n  parsedResponse = { message1: aiResponse };\n}\n\n// Extract messages and create array\nconst messages = [];\nif (parsedResponse.message1) messages.push(parsedResponse.message1);\nif (parsedResponse.message2) messages.push(parsedResponse.message2);\nif (parsedResponse.message3) messages.push(parsedResponse.message3);\n\n// Get user info\nconst userNumber = $('Merge Messages').first().json.number;\nconst platform = $('Merge Messages').first().json.platform;\n\n// Create output items for each message\nreturn messages.map((message, index) => ({\n  json: {\n    message: message,\n    number: userNumber,\n    platform: platform,\n    messageIndex: index + 1,\n    totalMessages: messages.length,\n    delay: index * 1000 // Add delay between messages\n  }\n}));"
+      },
+      "id": "segregate-responses",
+      "name": "Segregate AI Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2250, 300],
+      "notes": "Splits AI response into individual messages"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-responses",
+      "name": "Loop Over Responses",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [2450, 300],
+      "notes": "Sends each message individually with delay"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.delay }}",
+        "unit": "ms"
+      },
+      "id": "delay-between-messages",
+      "name": "Delay Between Messages",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2650, 300],
+      "webhookId": "message-delay-webhook",
+      "notes": "Adds human-like delay between messages"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CHAT_API_URL }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "platform",
+              "value": "={{ $json.platform }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-message",
+      "name": "Send Message to User",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2850, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "chat-api-credentials",
+          "name": "Chat Platform API"
+        }
+      },
+      "notes": "Sends message back via WhatsApp/Telegram API"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.messageIndex }}",
+              "operation": "equals",
+              "value2": "={{ $json.totalMessages }}"
+            }
+          ]
+        }
+      },
+      "id": "check-last-message",
+      "name": "Check If Last Message",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3050, 300],
+      "notes": "Determines if this is the final message"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 200],
+      "notes": "Sends success response to chat platform"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger - Chat Platform": {
+      "main": [
+        [
+          {
+            "node": "Set Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Variables": {
+      "main": [
+        [
+          {
+            "node": "Store Message in Data Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Message in Data Table": {
+      "main": [
+        [
+          {
+            "node": "Wait for Batch Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Batch Messages": {
+      "main": [
+        [
+          {
+            "node": "Get Queued Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Queued Messages": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Messages": {
+      "main": [
+        [
+          {
+            "node": "Update Message Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done Looping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Message Status": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Done Looping": {
+      "main": [
+        [
+          {
+            "node": "Merge Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Messages": {
+      "main": [
+        [
+          {
+            "node": "Claude AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Segregate AI Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Claude AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Claude AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segregate AI Responses": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Responses": {
+      "main": [
+        [
+          {
+            "node": "Delay Between Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delay Between Messages": {
+      "main": [
+        [
+          {
+            "node": "Send Message to User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message to User": {
+      "main": [
+        [
+          {
+            "node": "Check If Last Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Last Message": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler-workflow"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "AI Agent",
+      "id": "ai-agent-tag"
+    },
+    {
+      "name": "Chat Automation",
+      "id": "chat-automation-tag"
+    },
+    {
+      "name": "Claude Integration",
+      "id": "claude-integration-tag"
+    }
+  ],
+  "meta": {
+    "instanceId": "n8n-instance-production"
+  },
+  "pinData": {},
+  "versionId": "1.0.0"
+}

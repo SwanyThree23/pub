@@ -1,0 +1,83 @@
+{
+  "mcpServers": {
+    "n8n-automation-server": {
+      "command": "node",
+      "args": [
+        "./mcp-server/n8n-mcp-server.js"
+      ],
+      "env": {
+        "N8N_API_URL": "${N8N_API_URL}",
+        "N8N_API_KEY": "${N8N_API_KEY}",
+        "NODE_ENV": "production"
+      },
+      "metadata": {
+        "name": "N8N Automation Server",
+        "version": "1.0.0",
+        "description": "MCP server for integrating Claude with N8N workflows",
+        "capabilities": [
+          "trigger_workflows",
+          "query_executions",
+          "manage_data_tables",
+          "webhook_management"
+        ]
+      }
+    },
+    "data-analysis-server": {
+      "command": "python3",
+      "args": [
+        "./mcp-server/data-analysis-mcp-server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "${PYTHONPATH}:./mcp-server",
+        "DATA_STORAGE_PATH": "${DATA_STORAGE_PATH}",
+        "ENCRYPTION_KEY": "${ENCRYPTION_KEY}"
+      },
+      "metadata": {
+        "name": "Secure Data Analysis Server",
+        "version": "1.0.0",
+        "description": "MCP server for secure data analysis operations",
+        "capabilities": [
+          "data_analysis",
+          "statistical_operations",
+          "data_visualization",
+          "secure_data_access"
+        ]
+      }
+    },
+    "chat-platform-server": {
+      "command": "node",
+      "args": [
+        "./mcp-server/chat-platform-mcp-server.js"
+      ],
+      "env": {
+        "WHATSAPP_API_URL": "${WHATSAPP_API_URL}",
+        "WHATSAPP_API_KEY": "${WHATSAPP_API_KEY}",
+        "TELEGRAM_BOT_TOKEN": "${TELEGRAM_BOT_TOKEN}",
+        "CHAT_DB_PATH": "${CHAT_DB_PATH}"
+      },
+      "metadata": {
+        "name": "Chat Platform Integration Server",
+        "version": "1.0.0",
+        "description": "MCP server for multi-platform chat integrations",
+        "capabilities": [
+          "send_messages",
+          "receive_messages",
+          "manage_conversations",
+          "batch_operations"
+        ]
+      }
+    }
+  },
+  "global": {
+    "timeout": 30000,
+    "retryAttempts": 3,
+    "retryDelay": 1000,
+    "logLevel": "info",
+    "securitySettings": {
+      "validateRequests": true,
+      "requireAuthentication": true,
+      "enableRateLimiting": true,
+      "maxRequestsPerMinute": 60
+    }
+  }
+}

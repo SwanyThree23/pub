@@ -1,0 +1,428 @@
+{
+  "name": "Advanced AI Agent with Multiple Tools",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 5,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 400],
+      "notes": "Runs daily at 5 AM for automated tasks"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "manual-trigger",
+      "name": "Manual Chat Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 600],
+      "notes": "For testing and manual interactions"
+    },
+    {
+      "parameters": {
+        "agent": "conversationalAgent",
+        "promptType": "define",
+        "text": "=You are an intelligent personal assistant with access to multiple tools and services.\n\n**Your Role:**\n- Help users manage their calendar, check weather, send emails, and access information\n- Proactively use tools when appropriate\n- Provide thoughtful, contextual recommendations\n- Maintain a professional yet friendly tone\n\n**Available Tools:**\n1. Google Calendar - Check and manage events\n2. Weather Service - Get current weather and forecasts\n3. Air Quality Monitor - Check air quality index\n4. Trail Database - Access saved trail information\n5. Gmail - Send emails and notifications\n6. Web Search - Find information online\n\n**Current Task:**\n{{ $json.task || 'Assist the user with their request' }}\n\n**User Context:**\n{{ $json.userContext || 'General assistance' }}\n\n**Instructions:**\n1. Analyze what information you need\n2. Use appropriate tools to gather data\n3. Synthesize information into helpful recommendations\n4. Take action when requested\n\nProvide your response in a clear, actionable format.",
+        "hasOutputParser": false,
+        "options": {
+          "systemMessage": "You are a capable AI assistant with access to multiple tools. Use them wisely to help users accomplish their goals."
+        }
+      },
+      "id": "ai-agent-with-tools",
+      "name": "AI Agent with Tools",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [550, 400],
+      "notes": "Main AI agent with tool orchestration"
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 4000
+        }
+      },
+      "id": "claude-model-tools",
+      "name": "Claude Sonnet 4.5",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.7,
+      "position": [550, 600],
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic-credentials",
+          "name": "Anthropic Claude API"
+        }
+      },
+      "notes": "Claude model for reasoning and planning"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.userId || 'default-user' }}",
+        "contextWindowLength": 15
+      },
+      "id": "memory-tools",
+      "name": "Agent Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [550, 800],
+      "notes": "Maintains conversation history and context"
+    },
+    {
+      "parameters": {
+        "operation": "getEvents",
+        "calendar": "primary",
+        "returnAll": false,
+        "limit": 10,
+        "options": {
+          "timeMin": "={{ $now.toISO() }}",
+          "timeMax": "={{ $now.plus({ days: 7 }).toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "google-calendar-tool",
+      "name": "Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [750, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "google-calendar-credentials",
+          "name": "Google Calendar OAuth2"
+        }
+      },
+      "notes": "Retrieves upcoming calendar events"
+    },
+    {
+      "parameters": {
+        "operation": "currentWeather",
+        "cityName": "={{ $json.city || 'San Francisco' }}",
+        "additionalFields": {
+          "units": "imperial"
+        }
+      },
+      "id": "weather-tool",
+      "name": "OpenWeatherMap",
+      "type": "n8n-nodes-base.openWeatherMap",
+      "typeVersion": 1,
+      "position": [750, 350],
+      "credentials": {
+        "openWeatherMapApi": {
+          "id": "openweathermap-credentials",
+          "name": "OpenWeatherMap API"
+        }
+      },
+      "notes": "Gets current weather conditions"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.airnowapi.org/aq/observation/zipCode/current/?format=application/json&zipCode={{ $json.zipCode || '94102' }}&distance=25&API_KEY={{ $env.AIRNOW_API_KEY }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "autodetect"
+            }
+          }
+        }
+      },
+      "id": "air-quality-tool",
+      "name": "Air Quality Monitor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 500],
+      "notes": "Checks air quality index via AirNow API"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "sheetId": "={{ $env.GOOGLE_SHEET_ID }}",
+        "range": "Trails!A:E",
+        "options": {
+          "majorDimension": "ROWS",
+          "valueRenderOption": "FORMATTED_VALUE"
+        }
+      },
+      "id": "trails-database-tool",
+      "name": "Trail Database",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [750, 650],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "notes": "Accesses saved trail information"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipient || $env.DEFAULT_EMAIL }}",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "ccList": "={{ $json.cc }}",
+          "bccList": "={{ $json.bcc }}"
+        }
+      },
+      "id": "gmail-tool",
+      "name": "Gmail Sender",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [750, 800],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-credentials",
+          "name": "Gmail OAuth2"
+        }
+      },
+      "notes": "Sends emails via Gmail"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"api_key\": \"{{ $env.TAVILY_API_KEY }}\",\n  \"query\": \"{{ $json.searchQuery }}\",\n  \"search_depth\": \"advanced\",\n  \"include_answer\": true,\n  \"max_results\": 5\n}",
+        "options": {}
+      },
+      "id": "web-search-tool",
+      "name": "Web Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [750, 950],
+      "notes": "Performs web searches for current information"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format and structure the agent's output\nconst agentOutput = $input.first().json;\n\nlet structuredOutput = {\n  success: true,\n  timestamp: new Date().toISOString(),\n  response: agentOutput.output || agentOutput,\n  toolsUsed: [],\n  metadata: {}\n};\n\n// Extract tool usage information if available\nif (agentOutput.intermediateSteps) {\n  structuredOutput.toolsUsed = agentOutput.intermediateSteps.map(step => ({\n    tool: step.action?.tool,\n    input: step.action?.toolInput,\n    output: step.observation\n  }));\n}\n\n// Add relevant metadata\nstructuredOutput.metadata = {\n  userId: $('Manual Chat Trigger').first().json.userId || 'default-user',\n  executionTime: new Date().toISOString(),\n  modelUsed: 'claude-3-5-sonnet-20241022'\n};\n\nreturn { json: structuredOutput };"
+      },
+      "id": "format-output",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 400],
+      "notes": "Structures the final output"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "task-var",
+              "name": "task",
+              "value": "Check calendar for trail runs, recommend a trail based on weather and air quality, and send confirmation email",
+              "type": "string"
+            },
+            {
+              "id": "user-context",
+              "name": "userContext",
+              "value": "User prefers morning runs, concerned about air quality",
+              "type": "string"
+            },
+            {
+              "id": "user-id",
+              "name": "userId",
+              "value": "user-123",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "set-context",
+      "name": "Set Task Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [450, 400],
+      "notes": "Provides context and task details to agent"
+    }
+  ],
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Task Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Task Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Task Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent with Tools": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Sonnet 4.5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenWeatherMap": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Air Quality Monitor": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trail Database": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Sender": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Web Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent with Tools",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "error-handler-workflow"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "AI Agent",
+      "id": "ai-agent-tag"
+    },
+    {
+      "name": "Tools Integration",
+      "id": "tools-integration-tag"
+    },
+    {
+      "name": "Automation",
+      "id": "automation-tag"
+    }
+  ],
+  "meta": {
+    "instanceId": "n8n-instance-production"
+  },
+  "pinData": {},
+  "versionId": "1.0.0"
+}

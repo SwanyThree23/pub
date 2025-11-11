@@ -1,0 +1,84 @@
+{
+  "name": "n8n-claude-ai-workflows",
+  "version": "1.0.0",
+  "description": "Comprehensive N8N workflows with Claude AI integration, MCP servers, and secure data analysis",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "mcp:n8n": "node mcp-server/n8n-mcp-server.js",
+    "mcp:chat": "node mcp-server/chat-platform-mcp-server.js",
+    "mcp:all": "concurrently \"npm run mcp:n8n\" \"npm run mcp:chat\"",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "setup": "node scripts/setup.js",
+    "backup": "node scripts/backup.js",
+    "migrate": "node scripts/migrate-db.js"
+  },
+  "keywords": [
+    "n8n",
+    "claude",
+    "ai",
+    "automation",
+    "workflow",
+    "mcp",
+    "chatbot",
+    "whatsapp",
+    "telegram",
+    "data-analysis"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "better-sqlite3": "^9.2.2",
+    "jsonwebtoken": "^9.0.2",
+    "bcrypt": "^5.1.1",
+    "helmet": "^7.1.0",
+    "cors": "^2.8.5",
+    "compression": "^1.7.4",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "winston": "^3.11.0",
+    "winston-daily-rotate-file": "^4.7.1",
+    "luxon": "^3.4.4",
+    "crypto-js": "^4.2.0",
+    "node-cache": "^5.1.2",
+    "bull": "^4.12.0",
+    "ioredis": "^5.3.2",
+    "node-cron": "^3.0.3",
+    "sanitize-html": "^2.11.0",
+    "validator": "^13.11.0",
+    "uuid": "^9.0.1",
+    "mime-types": "^2.1.35"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.56.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1",
+    "prettier": "^3.1.1",
+    "@types/node": "^20.10.6"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SwanyThree23/pub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SwanyThree23/pub/issues"
+  }
+}

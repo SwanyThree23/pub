@@ -1,0 +1,403 @@
+{
+  "version": "1.0.0",
+  "description": "Security and guardrails configuration for N8N AI workflows",
+  "guardrails": {
+    "rate_limiting": {
+      "enabled": true,
+      "rules": [
+        {
+          "name": "per_user_message_limit",
+          "type": "sliding_window",
+          "limit": 30,
+          "window_seconds": 60,
+          "scope": "user_id",
+          "action": "throttle",
+          "message": "You're sending messages too quickly. Please wait a moment."
+        },
+        {
+          "name": "workflow_execution_limit",
+          "type": "fixed_window",
+          "limit": 100,
+          "window_seconds": 3600,
+          "scope": "workflow_id",
+          "action": "queue",
+          "message": "System is busy. Your request has been queued."
+        },
+        {
+          "name": "api_call_limit",
+          "type": "token_bucket",
+          "tokens_per_second": 10,
+          "bucket_size": 50,
+          "scope": "global",
+          "action": "reject",
+          "message": "API rate limit exceeded. Please try again later."
+        }
+      ]
+    },
+    "input_validation": {
+      "enabled": true,
+      "rules": [
+        {
+          "name": "message_length",
+          "field": "message",
+          "type": "length",
+          "min_length": 1,
+          "max_length": 4000,
+          "action": "reject",
+          "message": "Message must be between 1 and 4000 characters."
+        },
+        {
+          "name": "no_malicious_patterns",
+          "field": "message",
+          "type": "regex_blacklist",
+          "patterns": [
+            "(?i)<script[^>]*>.*?</script>",
+            "(?i)javascript:",
+            "(?i)on\\w+\\s*=",
+            "(?i)data:text/html",
+            "(?i)eval\\s*\\(",
+            "(?i)expression\\s*\\("
+          ],
+          "action": "sanitize",
+          "message": "Message contains potentially unsafe content."
+        },
+        {
+          "name": "sql_injection_prevention",
+          "field": "all",
+          "type": "regex_blacklist",
+          "patterns": [
+            "(?i)(\\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\\b.*\\b(FROM|INTO|WHERE|TABLE)\\b)",
+            "(?i)(UNION.*SELECT)",
+            "(?i)(--|;|\\|\\||&&)"
+          ],
+          "action": "reject",
+          "message": "Input contains invalid characters."
+        },
+        {
+          "name": "command_injection_prevention",
+          "field": "all",
+          "type": "regex_blacklist",
+          "patterns": [
+            "(?i)(\\||;|`|\\$\\(|\\$\\{)",
+            "(?i)(rm\\s+-rf|wget|curl|nc\\s|bash|sh\\s)",
+            "(?i)(&&|\\|\\||>|<|\\^)"
+          ],
+          "action": "reject",
+          "message": "Input contains invalid characters."
+        },
+        {
+          "name": "phone_number_format",
+          "field": "number",
+          "type": "regex_whitelist",
+          "patterns": [
+            "^\\+?[1-9]\\d{1,14}$"
+          ],
+          "action": "reject",
+          "message": "Invalid phone number format."
+        }
+      ]
+    },
+    "output_filtering": {
+      "enabled": true,
+      "rules": [
+        {
+          "name": "no_pii_exposure",
+          "type": "redaction",
+          "patterns": [
+            {
+              "name": "credit_card",
+              "regex": "\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b",
+              "replacement": "[REDACTED-CARD]"
+            },
+            {
+              "name": "ssn",
+              "regex": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+              "replacement": "[REDACTED-SSN]"
+            },
+            {
+              "name": "email",
+              "regex": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b",
+              "replacement": "[REDACTED-EMAIL]",
+              "exceptions": ["support@", "info@", "contact@"]
+            },
+            {
+              "name": "api_key",
+              "regex": "(?i)(api[_-]?key|token|secret|password)\\s*[=:]\\s*['\"]?([A-Za-z0-9\\-_]{20,})['\"]?",
+              "replacement": "$1=[REDACTED-KEY]"
+            }
+          ]
+        },
+        {
+          "name": "content_moderation",
+          "type": "profanity_filter",
+          "enabled": true,
+          "action": "replace",
+          "replacement": "[filtered]",
+          "custom_words": []
+        }
+      ]
+    },
+    "authentication": {
+      "enabled": true,
+      "methods": [
+        {
+          "name": "api_key",
+          "type": "header",
+          "header_name": "X-API-Key",
+          "required": true,
+          "validate_against": "${N8N_API_KEY}"
+        },
+        {
+          "name": "webhook_signature",
+          "type": "signature",
+          "algorithm": "sha256",
+          "header_name": "X-Webhook-Signature",
+          "secret": "${WEBHOOK_SECRET}",
+          "required": false
+        },
+        {
+          "name": "oauth_token",
+          "type": "oauth2",
+          "required": false,
+          "scopes": ["read", "write"]
+        }
+      ]
+    },
+    "authorization": {
+      "enabled": true,
+      "rules": [
+        {
+          "resource": "workflows",
+          "actions": ["execute", "read"],
+          "roles": ["user", "admin"],
+          "conditions": ["workflow.active === true"]
+        },
+        {
+          "resource": "data_tables",
+          "actions": ["read", "write"],
+          "roles": ["user", "admin"],
+          "conditions": ["user.verified === true"]
+        },
+        {
+          "resource": "admin_functions",
+          "actions": ["*"],
+          "roles": ["admin"],
+          "conditions": []
+        }
+      ]
+    },
+    "ai_safety": {
+      "enabled": true,
+      "rules": [
+        {
+          "name": "response_length_limit",
+          "max_tokens": 4000,
+          "action": "truncate",
+          "message": "Response truncated due to length."
+        },
+        {
+          "name": "hallucination_detection",
+          "enabled": true,
+          "confidence_threshold": 0.7,
+          "action": "flag",
+          "message": "Low confidence response. Verify information."
+        },
+        {
+          "name": "toxic_content_filter",
+          "enabled": true,
+          "toxicity_threshold": 0.8,
+          "action": "reject",
+          "message": "Response rejected due to content policy."
+        },
+        {
+          "name": "context_window_management",
+          "max_messages": 20,
+          "max_tokens_per_message": 500,
+          "action": "truncate_oldest"
+        },
+        {
+          "name": "tool_usage_limits",
+          "max_tools_per_execution": 10,
+          "max_tool_retries": 3,
+          "timeout_seconds": 30,
+          "action": "fail_gracefully"
+        }
+      ]
+    },
+    "data_protection": {
+      "enabled": true,
+      "encryption": {
+        "at_rest": {
+          "enabled": true,
+          "algorithm": "AES-256-GCM",
+          "key_rotation_days": 90
+        },
+        "in_transit": {
+          "enabled": true,
+          "tls_version": "1.3",
+          "cipher_suites": [
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_AES_128_GCM_SHA256"
+          ]
+        }
+      },
+      "data_retention": {
+        "conversations": {
+          "retention_days": 90,
+          "archive_after_days": 30,
+          "auto_delete": true
+        },
+        "logs": {
+          "retention_days": 30,
+          "archive_after_days": 7,
+          "auto_delete": true
+        },
+        "analytics": {
+          "retention_days": 365,
+          "anonymize_after_days": 90,
+          "auto_delete": false
+        }
+      },
+      "anonymization": {
+        "enabled": true,
+        "fields": ["user_id", "phone_number", "email"],
+        "method": "hashing",
+        "salt": "${ANONYMIZATION_SALT}"
+      }
+    },
+    "monitoring": {
+      "enabled": true,
+      "alerts": [
+        {
+          "name": "high_error_rate",
+          "condition": "error_rate > 0.05",
+          "window_minutes": 5,
+          "action": "notify",
+          "channels": ["email", "slack"]
+        },
+        {
+          "name": "unusual_activity",
+          "condition": "requests_per_minute > average * 3",
+          "window_minutes": 10,
+          "action": "notify",
+          "channels": ["email", "pagerduty"]
+        },
+        {
+          "name": "security_incident",
+          "condition": "security_violations > 10",
+          "window_minutes": 5,
+          "action": "block_and_notify",
+          "channels": ["email", "slack", "pagerduty"]
+        },
+        {
+          "name": "ai_quality_degradation",
+          "condition": "average_response_quality < 0.7",
+          "window_minutes": 30,
+          "action": "notify",
+          "channels": ["email"]
+        }
+      ],
+      "logging": {
+        "level": "info",
+        "include_pii": false,
+        "log_requests": true,
+        "log_responses": true,
+        "log_errors": true,
+        "retention_days": 30
+      }
+    },
+    "compliance": {
+      "gdpr": {
+        "enabled": true,
+        "data_subject_requests": {
+          "access": true,
+          "rectification": true,
+          "erasure": true,
+          "portability": true
+        },
+        "consent_management": true,
+        "dpo_contact": "dpo@example.com"
+      },
+      "ccpa": {
+        "enabled": true,
+        "do_not_sell": true,
+        "opt_out_mechanism": true
+      },
+      "hipaa": {
+        "enabled": false,
+        "baa_required": true,
+        "audit_logging": true
+      }
+    },
+    "circuit_breakers": {
+      "enabled": true,
+      "breakers": [
+        {
+          "name": "claude_api",
+          "failure_threshold": 5,
+          "timeout_seconds": 30,
+          "reset_timeout_seconds": 60,
+          "fallback": "queue_for_retry"
+        },
+        {
+          "name": "whatsapp_api",
+          "failure_threshold": 3,
+          "timeout_seconds": 15,
+          "reset_timeout_seconds": 30,
+          "fallback": "use_telegram"
+        },
+        {
+          "name": "database",
+          "failure_threshold": 3,
+          "timeout_seconds": 10,
+          "reset_timeout_seconds": 30,
+          "fallback": "use_cache"
+        }
+      ]
+    }
+  },
+  "security_headers": {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; object-src 'none'",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()"
+  },
+  "incident_response": {
+    "enabled": true,
+    "procedures": [
+      {
+        "severity": "critical",
+        "actions": [
+          "block_source",
+          "notify_admin",
+          "create_incident_ticket",
+          "enable_enhanced_monitoring"
+        ]
+      },
+      {
+        "severity": "high",
+        "actions": [
+          "rate_limit_source",
+          "notify_admin",
+          "create_incident_ticket"
+        ]
+      },
+      {
+        "severity": "medium",
+        "actions": [
+          "log_incident",
+          "notify_admin"
+        ]
+      },
+      {
+        "severity": "low",
+        "actions": [
+          "log_incident"
+        ]
+      }
+    ]
+  }
+}
