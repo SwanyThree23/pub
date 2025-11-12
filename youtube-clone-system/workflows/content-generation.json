@@ -1,0 +1,225 @@
+{
+  "name": "Content Generation from NotebookLM",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notebooklm-ready",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - NotebookLM Ready",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notebooklm-ready"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract NotebookLM data from webhook\nconst notebookData = items[0].json;\n\nreturn [{\n  json: {\n    notebook_id: notebookData.notebook_id,\n    source_summary: notebookData.summary || '',\n    key_points: notebookData.key_points || [],\n    sources: notebookData.sources || [],\n    content_requests: notebookData.content_requests || [],\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Parse NotebookLM Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Run Fair Use compliance check\nconst sources = items[0].json.sources;\nconst contentRequests = items[0].json.content_requests;\n\nconst complianceCheck = {\n  factor_1_transformation: 0,\n  factor_2_nature: 0,\n  factor_3_amount: 0,\n  factor_4_market: 0,\n  overall_score: 0,\n  passed: false,\n  warnings: []\n};\n\n// Factor 1: Check transformation plan\nif (contentRequests[0]?.transformation_plan) {\n  complianceCheck.factor_1_transformation = 85;\n} else {\n  complianceCheck.warnings.push('No transformation plan specified');\n  complianceCheck.factor_1_transformation = 40;\n}\n\n// Factor 2: Nature of work (educational/factual content safer)\nconst educationalKeywords = ['tutorial', 'guide', 'how-to', 'review', 'analysis'];\nconst hasEducational = sources.some(s => \n  educationalKeywords.some(kw => s.title?.toLowerCase().includes(kw))\n);\ncomplianceCheck.factor_2_nature = hasEducational ? 80 : 60;\n\n// Factor 3: Amount used (check source count)\nif (sources.length >= 5) {\n  complianceCheck.factor_3_amount = 90;  // Good synthesis\n} else if (sources.length >= 3) {\n  complianceCheck.factor_3_amount = 70;  // Moderate\n} else {\n  complianceCheck.warnings.push('Less than 3 sources - add more for better Fair Use');\n  complianceCheck.factor_3_amount = 40;\n}\n\n// Factor 4: Market effect (check if different platform/purpose)\nconst differentPlatform = contentRequests[0]?.target_platform !== 'youtube';\ncomplianceCheck.factor_4_market = differentPlatform ? 85 : 60;\n\n// Calculate overall score\ncomplianceCheck.overall_score = (\n  complianceCheck.factor_1_transformation +\n  complianceCheck.factor_2_nature +\n  complianceCheck.factor_3_amount +\n  complianceCheck.factor_4_market\n) / 4;\n\ncomplianceCheck.passed = complianceCheck.overall_score >= 70;\n\nreturn [{\n  json: {\n    ...items[0].json,\n    compliance_check: complianceCheck,\n    status: complianceCheck.passed ? 'compliant' : 'needs_review'\n  }\n}];"
+      },
+      "name": "Fair Use Compliance Check",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.compliance_check.overall_score}}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "name": "Check Compliance Passed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate compressed prompt for Claude\nconst summary = items[0].json.source_summary;\nconst keyPoints = items[0].json.key_points;\nconst sources = items[0].json.sources;\nconst request = items[0].json.content_requests[0];\n\n// Compressed prompt (token-efficient)\nconst prompt = `Write ${request.word_count}-word ${request.format} on ${request.topic}.\n\nSource Summary:\n${summary.substring(0, 500)}  // Truncate for efficiency\n\nKey Points:\n${keyPoints.slice(0, 5).join('\\n')}\n\nStructure:\n1. ${request.structure?.intro || 'Introduction with hook'}\n2. ${request.structure?.main || '3-4 main points with examples'}\n3. ${request.structure?.conclusion || 'Actionable conclusion'}\n\nTone: ${request.tone || 'Professional'}\nAudience: ${request.audience || 'General'}\n\nIMPORTANT: This is transformative content. Add:\n- Original analysis and insights\n- New frameworks/comparisons\n- Expert commentary\n- Different perspective from sources\n\n[ATTRIBUTION_PLACEHOLDER]`;\n\nreturn [{\n  json: {\n    ...items[0].json,\n    compressed_prompt: prompt,\n    estimated_tokens: Math.ceil(prompt.length / 4),\n    status: 'ready_for_generation'\n  }\n}];"
+      },
+      "name": "Build Compressed Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Select optimal Claude model based on complexity\nconst request = items[0].json.content_requests[0];\n\nlet complexityScore = 0;\n\n// Factors affecting complexity\nif (request.word_count > 2000) complexityScore += 20;\nif (request.requires_research) complexityScore += 25;\nif (items[0].json.sources.length > 5) complexityScore += 20;\nif (request.analysis_depth === 'deep') complexityScore += 30;\n\nlet selectedModel;\nif (complexityScore < 30) {\n  selectedModel = 'claude-haiku-4-5';  // $3/1M tokens\n} else if (complexityScore < 70) {\n  selectedModel = 'claude-sonnet-4-5-20250929';  // $30/1M tokens\n} else {\n  selectedModel = 'claude-opus-4';  // $60/1M tokens\n}\n\nreturn [{\n  json: {\n    ...items[0].json,\n    selected_model: selectedModel,\n    complexity_score: complexityScore,\n    estimated_cost: this.estimateCost(selectedModel, items[0].json.estimated_tokens)\n  }\n}];\n\n// Helper function\nfunction estimateCost(model, tokens) {\n  const pricing = {\n    'claude-haiku-4-5': 3,\n    'claude-sonnet-4-5-20250929': 30,\n    'claude-opus-4': 60\n  };\n  return ((tokens / 1000000) * pricing[model]).toFixed(4);\n}"
+      },
+      "name": "Select Optimal Model",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{$env.ANTHROPIC_API_KEY}}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{$json.selected_model}}"
+            },
+            {
+              "name": "max_tokens",
+              "value": 4000
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"user\", \"content\": \"{{$json.compressed_prompt}}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract generated content from Claude response\nconst response = items[0].json;\nconst generatedContent = response.content[0].text;\n\n// Calculate actual cost\nconst inputTokens = response.usage.input_tokens;\nconst outputTokens = response.usage.output_tokens;\nconst model = items[0].json.selected_model;\n\nconst pricing = {\n  'claude-haiku-4-5': { input: 1, output: 5 },\n  'claude-sonnet-4-5-20250929': { input: 3, output: 15 },\n  'claude-opus-4': { input: 15, output: 75 }\n};\n\nconst cost = (\n  (inputTokens / 1000000) * pricing[model].input +\n  (outputTokens / 1000000) * pricing[model].output\n);\n\nreturn [{\n  json: {\n    ...items[0].json,\n    generated_content: generatedContent,\n    actual_cost: cost.toFixed(4),\n    tokens_used: {\n      input: inputTokens,\n      output: outputTokens,\n      total: inputTokens + outputTokens\n    },\n    status: 'generated'\n  }\n}];"
+      },
+      "name": "Extract Generated Content",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Add attribution automatically\nconst AttributionEngine = {\n  generateAttribution(sources, platform) {\n    let attribution = '\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━\\n';\n    attribution += '📚 SOURCES & ATTRIBUTION\\n';\n    attribution += '━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n';\n    attribution += 'This content is based on analysis and synthesis of:\\n\\n';\n\n    sources.forEach((source, index) => {\n      attribution += `${index + 1}. \"${source.title}\"\\n`;\n      attribution += `   by ${source.creator}\\n`;\n      attribution += `   ${source.url}\\n\\n`;\n    });\n\n    attribution += 'This content adds:\\n';\n    attribution += '• Comprehensive analysis and synthesis\\n';\n    attribution += '• Expert insights and recommendations\\n';\n    attribution += '• Structured comparison framework\\n';\n    attribution += '• Additional context and research\\n\\n';\n    attribution += 'This use constitutes Fair Use under 17 U.S.C. § 107.\\n';\n\n    return attribution;\n  }\n};\n\nconst content = items[0].json.generated_content;\nconst sources = items[0].json.sources;\nconst platform = items[0].json.content_requests[0]?.target_platform || 'blog';\n\n// Replace attribution placeholder\nconst attribution = AttributionEngine.generateAttribution(sources, platform);\nconst finalContent = content.replace('[ATTRIBUTION_PLACEHOLDER]', attribution);\n\nreturn [{\n  json: {\n    ...items[0].json,\n    final_content: finalContent,\n    attribution_added: true,\n    status: 'attribution_complete'\n  }\n}];"
+      },
+      "name": "Add Attribution",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "generated_content",
+        "fields": "notebook_id,final_content,sources,compliance_check,actual_cost,tokens_used,created_at",
+        "options": {}
+      },
+      "name": "Store in Database",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\n  \"success\": true,\\n  \"content_id\": \"{{$json._id}}\",\\n  \"word_count\": {{$json.final_content.split(' ').length}},\\n  \"cost\": \"${{$json.actual_cost}}\",\\n  \"compliance_score\": {{$json.compliance_check.overall_score}},\\n  \"status\": \"ready_for_distribution\"\\n}"
+      },
+      "name": "Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2250, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\n  \"success\": false,\\n  \"message\": \"Fair Use compliance check failed\",\\n  \"compliance_score\": {{$json.compliance_check.overall_score}},\\n  \"warnings\": {{$json.compliance_check.warnings}},\\n  \"action_required\": \"Review and strengthen transformation before proceeding\"\\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Response - Compliance Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log compliance failure\nconst failureRecord = {\n  notebook_id: items[0].json.notebook_id,\n  compliance_check: items[0].json.compliance_check,\n  failed_at: new Date().toISOString(),\n  action_required: 'Review transformation plan'\n};\n\nreturn [{\n  json: failureRecord\n}];"
+      },
+      "name": "Log Compliance Failure",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1250, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - NotebookLM Ready": {
+      "main": [[{"node": "Parse NotebookLM Data", "type": "main", "index": 0}]]
+    },
+    "Parse NotebookLM Data": {
+      "main": [[{"node": "Fair Use Compliance Check", "type": "main", "index": 0}]]
+    },
+    "Fair Use Compliance Check": {
+      "main": [[{"node": "Check Compliance Passed", "type": "main", "index": 0}]]
+    },
+    "Check Compliance Passed": {
+      "main": [
+        [{"node": "Build Compressed Prompt", "type": "main", "index": 0}],
+        [{"node": "Log Compliance Failure", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Compressed Prompt": {
+      "main": [[{"node": "Select Optimal Model", "type": "main", "index": 0}]]
+    },
+    "Select Optimal Model": {
+      "main": [[{"node": "Call Claude API", "type": "main", "index": 0}]]
+    },
+    "Call Claude API": {
+      "main": [[{"node": "Extract Generated Content", "type": "main", "index": 0}]]
+    },
+    "Extract Generated Content": {
+      "main": [[{"node": "Add Attribution", "type": "main", "index": 0}]]
+    },
+    "Add Attribution": {
+      "main": [[{"node": "Store in Database", "type": "main", "index": 0}]]
+    },
+    "Store in Database": {
+      "main": [[{"node": "Response - Success", "type": "main", "index": 0}]]
+    },
+    "Log Compliance Failure": {
+      "main": [[{"node": "Response - Compliance Failed", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["content-generation", "claude", "fair-use"],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

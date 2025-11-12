@@ -1,0 +1,382 @@
+{
+  "name": "Multi-Platform Content Distribution",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "distribute-content",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - Distribute Content",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "distribute-content"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse distribution request\nconst contentId = items[0].json.content_id;\nconst platforms = items[0].json.platforms || [];\n\nif (!contentId || !platforms.length) {\n  throw new Error('Content ID and platforms required');\n}\n\nreturn [{\n  json: {\n    content_id: contentId,\n    platforms: platforms,\n    timestamp: new Date().toISOString(),\n    status: 'pending_retrieval'\n  }\n}];"
+      },
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "findOne",
+        "collection": "generated_content",
+        "query": "={\"_id\": \"{{$json.content_id}}\"}",
+        "options": {}
+      },
+      "name": "Fetch Content from Database",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.final_content}}",
+              "operation": "notEmpty"
+            },
+            {
+              "value1": "={{$json.attribution_added}}",
+              "operation": "equal",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Verify Content Ready",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Split content for different platforms\nconst content = items[0].json.final_content;\nconst platforms = items[0].json.platforms;\n\nconst AttributionEngine = {\n  // Platform-specific attribution formatters\n  formatForTwitter(content, sources) {\n    // Truncate for Twitter's character limit\n    const mainContent = content.substring(0, 2000);\n    const thread = [];\n\n    // Main tweet(s)\n    const chunks = this.chunkText(mainContent, 280);\n    chunks.forEach(chunk => thread.push({ type: 'content', text: chunk }));\n\n    // Attribution tweets\n    thread.push({ type: 'attribution', text: '📚 Sources:' });\n    sources.slice(0, 3).forEach((src, i) => {\n      thread.push({\n        type: 'source',\n        text: `${i + 1}. ${src.title} by ${src.creator}\\n${src.url}`\n      });\n    });\n\n    return thread;\n  },\n\n  formatForLinkedIn(content, sources) {\n    let post = content;\n    post += '\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━\\n';\n    post += '📚 Research Sources:\\n\\n';\n    sources.forEach((src, i) => {\n      post += `${i + 1}. ${src.title}\\n   By ${src.creator}\\n   ${src.url}\\n\\n`;\n    });\n    post += '#ContentAttribution #FairUse';\n    return post;\n  },\n\n  formatForBlog(content, sources) {\n    // Already formatted with HTML attribution\n    return content;\n  },\n\n  chunkText(text, maxLength) {\n    const words = text.split(' ');\n    const chunks = [];\n    let current = '';\n\n    words.forEach(word => {\n      if ((current + word).length > maxLength) {\n        chunks.push(current.trim());\n        current = word + ' ';\n      } else {\n        current += word + ' ';\n      }\n    });\n\n    if (current) chunks.push(current.trim());\n    return chunks;\n  }\n};\n\nconst formattedContent = {};\nconst sources = items[0].json.sources || [];\n\nplatforms.forEach(platform => {\n  switch (platform) {\n    case 'twitter':\n      formattedContent.twitter = AttributionEngine.formatForTwitter(content, sources);\n      break;\n    case 'linkedin':\n      formattedContent.linkedin = AttributionEngine.formatForLinkedIn(content, sources);\n      break;\n    case 'blog':\n      formattedContent.blog = AttributionEngine.formatForBlog(content, sources);\n      break;\n    case 'medium':\n      formattedContent.medium = content;  // Medium supports long-form\n      break;\n  }\n});\n\nreturn [{\n  json: {\n    ...items[0].json,\n    formatted_content: formattedContent,\n    status: 'formatted'\n  }\n}];"
+      },
+      "name": "Format for Platforms",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Split Platforms",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.platforms[$index]}}",
+              "operation": "equal",
+              "value2": "twitter"
+            }
+          ]
+        }
+      },
+      "name": "Is Twitter?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/tweets",
+        "authentication": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.TWITTER_BEARER_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{$json.formatted_content.twitter[0].text}}"
+            }
+          ]
+        }
+      },
+      "name": "Post to Twitter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1650, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.platforms[$index]}}",
+              "operation": "equal",
+              "value2": "linkedin"
+            }
+          ]
+        }
+      },
+      "name": "Is LinkedIn?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "authentication": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.LINKEDIN_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author",
+              "value": "={{$env.LINKEDIN_PERSON_URN}}"
+            },
+            {
+              "name": "lifecycleState",
+              "value": "PUBLISHED"
+            },
+            {
+              "name": "specificContent",
+              "value": "={\"com.linkedin.ugc.ShareContent\": {\"shareCommentary\": {\"text\": \"{{$json.formatted_content.linkedin}}\"}}}"
+            }
+          ]
+        }
+      },
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.platforms[$index]}}",
+              "operation": "equal",
+              "value2": "blog"
+            }
+          ]
+        }
+      },
+      "name": "Is Blog?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BLOG_API_ENDPOINT}}/posts",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.BLOG_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "={{$json.content_requests[0].topic}}"
+            },
+            {
+              "name": "content",
+              "value": "={{$json.formatted_content.blog}}"
+            },
+            {
+              "name": "status",
+              "value": "published"
+            }
+          ]
+        }
+      },
+      "name": "Post to Blog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Merge all platform results\nconst results = items.map(item => ({\n  platform: item.json.platform || 'unknown',\n  post_id: item.json.id || item.json.data?.id,\n  post_url: item.json.url || item.json.data?.url,\n  posted_at: new Date().toISOString(),\n  status: 'published'\n}));\n\nreturn [{\n  json: {\n    content_id: items[0].json.content_id,\n    distribution_results: results,\n    total_platforms: results.length,\n    status: 'distributed'\n  }\n}];"
+      },
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "generated_content",
+        "updateKey": "_id",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "distribution_results",
+              "fieldValue": "={{$json.distribution_results}}"
+            },
+            {
+              "fieldId": "distributed_at",
+              "fieldValue": "={{new Date().toISOString()}}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "distributed"
+            }
+          ]
+        }
+      },
+      "name": "Update Database",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Track analytics\nconst analyticsRecords = items[0].json.distribution_results.map(result => ({\n  content_id: items[0].json.content_id,\n  platform: result.platform,\n  post_id: result.post_id,\n  post_url: result.post_url,\n  posted_at: result.posted_at,\n  initial_metrics: {\n    views: 0,\n    engagements: 0,\n    clicks: 0\n  },\n  last_checked: new Date().toISOString()\n}));\n\nreturn analyticsRecords.map(record => ({ json: record }));"
+      },
+      "name": "Create Analytics Records",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [2250, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "content_analytics",
+        "options": {}
+      },
+      "name": "Store Analytics",
+      "type": "n8n-nodes-base.mongodb",
+      "typeVersion": 1,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\n  \"success\": true,\\n  \"content_id\": \"{{$json.content_id}}\",\\n  \"platforms_distributed\": {{$json.total_platforms}},\\n  \"results\": {{$json.distribution_results}},\\n  \"message\": \"Content successfully distributed to all platforms\"\\n}"
+      },
+      "name": "Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2650, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\n  \"success\": false,\\n  \"message\": \"Content not ready for distribution\",\\n  \"content_id\": \"{{$json.content_id}}\",\\n  \"status\": \"{{$json.status}}\"\\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Response - Not Ready",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Distribute Content": {
+      "main": [[{"node": "Parse Request", "type": "main", "index": 0}]]
+    },
+    "Parse Request": {
+      "main": [[{"node": "Fetch Content from Database", "type": "main", "index": 0}]]
+    },
+    "Fetch Content from Database": {
+      "main": [[{"node": "Verify Content Ready", "type": "main", "index": 0}]]
+    },
+    "Verify Content Ready": {
+      "main": [
+        [{"node": "Format for Platforms", "type": "main", "index": 0}],
+        [{"node": "Response - Not Ready", "type": "main", "index": 0}]
+      ]
+    },
+    "Format for Platforms": {
+      "main": [[{"node": "Split Platforms", "type": "main", "index": 0}]]
+    },
+    "Split Platforms": {
+      "main": [
+        [{"node": "Is Twitter?", "type": "main", "index": 0}],
+        [{"node": "Merge Results", "type": "main", "index": 0}]
+      ]
+    },
+    "Is Twitter?": {
+      "main": [
+        [{"node": "Post to Twitter", "type": "main", "index": 0}]
+      ]
+    },
+    "Is LinkedIn?": {
+      "main": [
+        [{"node": "Post to LinkedIn", "type": "main", "index": 0}]
+      ]
+    },
+    "Is Blog?": {
+      "main": [
+        [{"node": "Post to Blog", "type": "main", "index": 0}]
+      ]
+    },
+    "Post to Twitter": {
+      "main": [[{"node": "Split Platforms", "type": "main", "index": 0}]]
+    },
+    "Post to LinkedIn": {
+      "main": [[{"node": "Split Platforms", "type": "main", "index": 0}]]
+    },
+    "Post to Blog": {
+      "main": [[{"node": "Split Platforms", "type": "main", "index": 0}]]
+    },
+    "Merge Results": {
+      "main": [[{"node": "Update Database", "type": "main", "index": 0}]]
+    },
+    "Update Database": {
+      "main": [[{"node": "Create Analytics Records", "type": "main", "index": 0}]]
+    },
+    "Create Analytics Records": {
+      "main": [[{"node": "Store Analytics", "type": "main", "index": 0}]]
+    },
+    "Store Analytics": {
+      "main": [[{"node": "Response - Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["distribution", "multi-platform", "social-media"],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

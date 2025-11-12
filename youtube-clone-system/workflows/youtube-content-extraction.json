@@ -1,0 +1,127 @@
+{
+  "name": "YouTube Content Extraction & NotebookLM Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook - Trigger Content Extraction",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "youtube-extract"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract YouTube URLs from request\nconst youtubeUrls = items[0].json.urls || [];\nconst notebookId = items[0].json.notebook_id;\n\nif (!youtubeUrls.length) {\n  throw new Error('No YouTube URLs provided');\n}\n\nreturn youtubeUrls.map(url => ({\n  json: {\n    youtube_url: url,\n    notebook_id: notebookId,\n    timestamp: new Date().toISOString(),\n    status: 'pending_extraction'\n  }\n}));"
+      },
+      "name": "Parse YouTube URLs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.youtube.com/watch?v={{$json.youtube_url}}",
+        "options": {}
+      },
+      "name": "Fetch YouTube Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract video metadata from YouTube page\nconst html = items[0].binary.data;\n\n// In real implementation, parse HTML to extract:\n// - Video title\n// - Channel name\n// - Video description\n// - Publish date\n// - Duration\n// - View count\n\nconst metadata = {\n  video_id: items[0].json.youtube_url,\n  title: 'Extracted Title',  // Parse from HTML\n  channel: 'Channel Name',   // Parse from HTML\n  description: 'Video description...',  // Parse from HTML\n  published_date: '2024-01-01',\n  duration: '15:30',\n  view_count: 10000,\n  extraction_timestamp: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    ...items[0].json,\n    metadata: metadata,\n    status: 'metadata_extracted'\n  }\n}];"
+      },
+      "name": "Extract Video Metadata",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {\n          "string": [\n            {\n              "value1": "={{$json.metadata.title}}",\n              "operation": "notEmpty"\n            }\n          ]\n        }\n      },\n      "name": "Check Metadata Valid",\n      "type": "n8n-nodes-base.if",\n      "typeVersion": 1,\n      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Store video metadata in database\nconst metadata = items[0].json.metadata;\nconst notebookId = items[0].json.notebook_id;\n\n// Database insert (MongoDB example)\nconst record = {\n  notebook_id: notebookId,\n  video_metadata: metadata,\n  status: 'ready_for_notebooklm',\n  created_at: new Date().toISOString(),\n  processed: false\n};\n\nreturn [{\n  json: {\n    ...items[0].json,\n    database_record: record,\n    status: 'stored',\n    message: 'Video metadata stored. Ready for NotebookLM import.'\n  }\n}];"
+      },
+      "name": "Store in Database",\n      "type": "n8n-nodes-base.function",\n      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Manual step notification\n// In actual workflow, this would trigger:\n// 1. Notification to user to use Grabbit extension\n// 2. Copy URLs to clipboard for NotebookLM Web Sync\n// 3. Instructions for importing to NotebookLM\n\nconst instructions = {\n  step_1: 'Use Grabbit Chrome extension to collect video URLs',\n  step_2: 'Open NotebookLM and navigate to notebook: ' + items[0].json.notebook_id,\n  step_3: 'Use NotebookLM Web Sync extension to import content',\n  step_4: 'Wait for NotebookLM to process the content',\n  step_5: 'Webhook will be called when ready for content generation'\n};\n\nreturn [{\n  json: {\n    ...items[0].json,\n    instructions: instructions,\n    next_webhook: '/notebooklm-ready',\n    status: 'awaiting_manual_import'\n  }\n}];"
+      },
+      "name": "Generate Import Instructions",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "mode": "email",\n        "fromEmail": "automation@yourdomain.com",\n        "toEmail": "={{$json.user_email}}",\n        "subject": "NotebookLM Import Ready",\n        "text": "=Video extraction complete!\\n\\nNext steps:\\n{{$json.instructions.step_1}}\\n{{$json.instructions.step_2}}\\n{{$json.instructions.step_3}}\\n\\nVideo: {{$json.metadata.title}}\\nNotebook: {{$json.notebook_id}}"\n      },\n      "name": "Send Email Notification",\n      "type": "n8n-nodes-base.emailSend",\n      "typeVersion": 1,\n      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",\n        "responseBody": "={\\n  \"success\": true,\\n  \"message\": \"Video extraction complete\",\\n  \"video_title\": \"{{$json.metadata.title}}\",\\n  \"status\": \"{{$json.status}}\",\\n  \"next_steps\": {{$json.instructions}}\\n}"\n      },
+      "name": "Response - Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",\n        "responseBody": "={\\n  \"success\": false,\\n  \"message\": \"Metadata extraction failed\",\\n  \"video_url\": \"{{$json.youtube_url}}\"\\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "name": "Response - Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 400]
+    }
+  ],
+  "connections": {
+    "Webhook - Trigger Content Extraction": {
+      "main": [[{"node": "Parse YouTube URLs", "type": "main", "index": 0}]]
+    },
+    "Parse YouTube URLs": {
+      "main": [[{"node": "Fetch YouTube Page", "type": "main", "index": 0}]]
+    },
+    "Fetch YouTube Page": {
+      "main": [[{"node": "Extract Video Metadata", "type": "main", "index": 0}]]
+    },
+    "Extract Video Metadata": {
+      "main": [[{"node": "Check Metadata Valid", "type": "main", "index": 0}]]
+    },
+    "Check Metadata Valid": {
+      "main": [
+        [{"node": "Store in Database", "type": "main", "index": 0}],
+        [{"node": "Response - Error", "type": "main", "index": 0}]
+      ]
+    },
+    "Store in Database": {
+      "main": [[{"node": "Generate Import Instructions", "type": "main", "index": 0}]]
+    },
+    "Generate Import Instructions": {
+      "main": [[{"node": "Send Email Notification", "type": "main", "index": 0}]]
+    },
+    "Send Email Notification": {
+      "main": [[{"node": "Response - Success", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["youtube", "extraction", "notebooklm"],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
