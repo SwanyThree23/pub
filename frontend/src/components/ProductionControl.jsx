@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Radio, Users, Mic, MicOff, Volume2, Settings, Tv } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function ProductionControl({ token }) {
+  const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [guests, setGuests] = useState([]);
   const [scenes, setScenes] = useState([]);
@@ -229,7 +231,7 @@ export default function ProductionControl({ token }) {
                 <QuickAction icon="🎬" label="Go Live" onClick={() => switchScene('Grid_4_Guests')} />
                 <QuickAction icon="🔇" label="Mute All" onClick={() => guests.forEach(g => muteGuest(g.slot, true))} />
                 <QuickAction icon="🔊" label="Unmute All" onClick={() => guests.forEach(g => muteGuest(g.slot, false))} />
-                <QuickAction icon="📊" label="View Analytics" onClick={() => window.location.href = '/analytics'} />
+                <QuickAction icon="📊" label="View Analytics" onClick={() => navigate('/analytics')} />
               </div>
             </div>
           </div>

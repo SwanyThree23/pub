@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import HITLQueue from './components/HITLQueue';
 import StreamControl from './components/StreamControl';
@@ -132,12 +132,12 @@ const Navigation = ({ onLogout, user }) => (
 );
 
 const NavLink = ({ to, children }) => (
-  <a
-    href={to}
+  <Link
+    to={to}
     className="text-white/70 hover:text-white transition-colors px-3 py-2 rounded-lg hover:bg-white/5"
   >
     {children}
-  </a>
+  </Link>
 );
 
 export default App;

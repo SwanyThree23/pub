@@ -364,6 +364,16 @@ app.post('/vdo/room/:id/guest/:guestSlot/mute', auth, async (req, res) => {
   }
 });
 
+// Unmute guest
+app.post('/vdo/room/:id/guest/:guestSlot/unmute', auth, async (req, res) => {
+  try {
+    const result = await services.vdo.unmuteGuest(req.params.id, parseInt(req.params.guestSlot));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Set guest volume
 app.post('/vdo/room/:id/guest/:guestSlot/volume', auth, async (req, res) => {
   try {
