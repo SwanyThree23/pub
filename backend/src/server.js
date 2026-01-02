@@ -17,6 +17,9 @@ import { MonitoringService } from './services/MonitoringService.js';
 import { EVMuxService } from './services/EVMuxService.js';
 import { PRISMService } from './services/PRISMService.js';
 import { VDONinjaService } from './services/VDONinjaService.js';
+import { SmartDirectorService } from './services/SmartDirectorService.js';
+import { TranscriptionService } from './services/TranscriptionService.js';
+import { OBSWebSocketService } from './services/OBSWebSocketService.js';
 
 const app = express();
 const server = createServer(app);
@@ -39,8 +42,18 @@ const services = {
   monitoring: new MonitoringService(),
   evmux: new EVMuxService(),
   prism: new PRISMService(),
-  vdo: new VDONinjaService()
+  vdo: new VDONinjaService(),
+  obs: new OBSWebSocketService(),
+  transcription: new TranscriptionService()
 };
+
+// Initialize Smart Director (requires VDO and OBS services)
+services.smartDirector = new SmartDirectorService(services.vdo, services.obs);
+
+// Connect to OBS WebSocket on startup
+services.obs.connect().catch(err => {
+  console.warn('⚠️  OBS WebSocket not available:', err.message);
+});
 
 // Auth Middleware
 const auth = (req, res, next) => {
@@ -280,6 +293,438 @@ app.post('/vdo/room/:id/guest-link', auth, async (req, res) => {
     const { guestName } = req.body;
     const link = services.vdo.generateGuestLink(req.params.id, guestName);
     res.json(link);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== VDO.NINJA REMOTE CONTROL API ====================
+
+// Execute webhook command
+app.post('/vdo/webhook/:roomId/:action', auth, async (req, res) => {
+  try {
+    const { roomId, action } = req.params;
+    const { value } = req.body;
+
+    const result = await services.vdo.executeWebhook(roomId, action, value);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mute local microphone
+app.post('/vdo/room/:id/mute', auth, async (req, res) => {
+  try {
+    const result = await services.vdo.muteLocal(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unmute local microphone
+app.post('/vdo/room/:id/unmute', auth, async (req, res) => {
+  try {
+    const result = await services.vdo.unmuteLocal(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add guest to scene
+app.post('/vdo/room/:id/scene/:sceneNumber/guest/:guestSlot', auth, async (req, res) => {
+  try {
+    const { id, sceneNumber, guestSlot } = req.params;
+    const result = await services.vdo.addGuestToScene(id, parseInt(guestSlot), parseInt(sceneNumber));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Switch to scene
+app.post('/vdo/room/:id/scene/:sceneNumber', auth, async (req, res) => {
+  try {
+    const result = await services.vdo.switchScene(req.params.id, parseInt(req.params.sceneNumber));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mute guest
+app.post('/vdo/room/:id/guest/:guestSlot/mute', auth, async (req, res) => {
+  try {
+    const result = await services.vdo.muteGuest(req.params.id, parseInt(req.params.guestSlot));
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set guest volume
+app.post('/vdo/room/:id/guest/:guestSlot/volume', auth, async (req, res) => {
+  try {
+    const { volume } = req.body;
+    const result = await services.vdo.setGuestVolume(
+      req.params.id,
+      parseInt(req.params.guestSlot),
+      parseInt(volume)
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create scene
+app.post('/vdo/room/:id/scenes', auth, async (req, res) => {
+  try {
+    const { sceneName, guestSlots } = req.body;
+    const scene = services.vdo.createScene(req.params.id, sceneName, guestSlots);
+    res.json(scene);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get browser capture URL for PRISM
+app.get('/vdo/room/:id/browser-url/:guestSlot', auth, async (req, res) => {
+  try {
+    const { type = 'guest' } = req.query;
+    const url = services.vdo.createBrowserCaptureURL(
+      req.params.id,
+      parseInt(req.params.guestSlot),
+      type
+    );
+    res.json({ url });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Track audio level (for AI scene switching)
+app.post('/vdo/room/:id/audio-level', auth, async (req, res) => {
+  try {
+    const { guestSlot, level } = req.body;
+    services.vdo.trackAudioLevel(req.params.id, parseInt(guestSlot), parseFloat(level));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get active speaker
+app.get('/vdo/room/:id/active-speaker', auth, async (req, res) => {
+  try {
+    const activeSpeaker = services.vdo.getActiveSpeaker(req.params.id);
+    res.json({ activeSpeaker });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate n8n workflow
+app.get('/vdo/room/:id/n8n-workflow', auth, async (req, res) => {
+  try {
+    const { type = 'scene-switching' } = req.query;
+    const workflow = services.vdo.generateN8nWorkflow(req.params.id, type);
+    res.json(workflow);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== OBS/PRISM CONTROL ====================
+
+// Get scenes
+app.get('/obs/scenes', auth, async (req, res) => {
+  try {
+    const scenes = await services.obs.getScenes();
+    res.json({ scenes });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current scene
+app.get('/obs/scene/current', auth, async (req, res) => {
+  try {
+    const scene = await services.obs.getCurrentScene();
+    res.json({ scene });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set current scene
+app.post('/obs/scene/current', auth, async (req, res) => {
+  try {
+    const { sceneName } = req.body;
+    await services.obs.setCurrentScene(sceneName);
+    res.json({ success: true, scene: sceneName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set preview scene (Studio Mode)
+app.post('/obs/scene/preview', auth, async (req, res) => {
+  try {
+    const { sceneName } = req.body;
+    await services.obs.setPreviewScene(sceneName);
+    res.json({ success: true, scene: sceneName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Transition to program
+app.post('/obs/transition', auth, async (req, res) => {
+  try {
+    await services.obs.transitionToProgram();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create guest scene
+app.post('/obs/scenes/guest', auth, async (req, res) => {
+  try {
+    const { guestSlot, roomId } = req.body;
+    const browserURL = services.vdo.createBrowserCaptureURL(roomId, guestSlot, 'guest');
+    const sceneName = await services.obs.createGuestScene(guestSlot, browserURL);
+    res.json({ success: true, sceneName, browserURL });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create grid scene
+app.post('/obs/scenes/grid', auth, async (req, res) => {
+  try {
+    const { guestSlots, roomId } = req.body;
+    const getURL = (slot) => services.vdo.createBrowserCaptureURL(roomId, slot, 'guest');
+    const sceneName = await services.obs.createGridScene(guestSlots, getURL);
+    res.json({ success: true, sceneName });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mute audio source
+app.post('/obs/audio/mute', auth, async (req, res) => {
+  try {
+    const { sourceName, muted } = req.body;
+    await services.obs.setAudioMute(sourceName, muted);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Set audio volume
+app.post('/obs/audio/volume', auth, async (req, res) => {
+  try {
+    const { sourceName, volume } = req.body;
+    await services.obs.setAudioVolume(sourceName, volume);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start/stop streaming
+app.post('/obs/streaming/start', auth, async (req, res) => {
+  try {
+    await services.obs.startStreaming();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/obs/streaming/stop', auth, async (req, res) => {
+  try {
+    await services.obs.stopStreaming();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enable/disable Studio Mode
+app.post('/obs/studio-mode', auth, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (enabled) {
+      await services.obs.enableStudioMode();
+    } else {
+      await services.obs.disableStudioMode();
+    }
+    res.json({ success: true, studioModeEnabled: enabled });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get OBS stats
+app.get('/obs/stats', auth, async (req, res) => {
+  try {
+    const stats = await services.obs.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SMART DIRECTOR (AI SCENE SWITCHING) ====================
+
+// Start AI auto-switching
+app.post('/smart-director/start', auth, async (req, res) => {
+  try {
+    const { roomId, guestSlots, config } = req.body;
+    const session = services.smartDirector.startAutoSwitching(roomId, guestSlots, config);
+    res.json({ success: true, session });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop AI auto-switching
+app.post('/smart-director/stop', auth, async (req, res) => {
+  try {
+    const { roomId } = req.body;
+    services.smartDirector.stopAutoSwitching(roomId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual scene switch (override AI)
+app.post('/smart-director/manual-switch', auth, async (req, res) => {
+  try {
+    const { roomId, guestSlot } = req.body;
+    await services.smartDirector.manualSwitch(roomId, guestSlot);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get Smart Director stats
+app.get('/smart-director/stats/:roomId', auth, async (req, res) => {
+  try {
+    const stats = services.smartDirector.getStats(req.params.roomId);
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update Smart Director config
+app.patch('/smart-director/config/:roomId', auth, async (req, res) => {
+  try {
+    const config = services.smartDirector.updateConfig(req.params.roomId, req.body);
+    res.json({ success: true, config });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== TRANSCRIPTION & SUBTITLES ====================
+
+// Start transcription
+app.post('/transcription/start', auth, async (req, res) => {
+  try {
+    const { streamId, language, targetLanguage } = req.body;
+    const session = await services.transcription.startTranscription(
+      streamId,
+      language,
+      targetLanguage
+    );
+    res.json({ success: true, session });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Transcribe audio chunk
+app.post('/transcription/:streamId/chunk', auth, async (req, res) => {
+  try {
+    const audioBuffer = req.body; // Assume raw audio buffer in request body
+    const transcript = await services.transcription.transcribeChunk(
+      req.params.streamId,
+      audioBuffer
+    );
+    res.json(transcript);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current caption
+app.get('/transcription/:streamId/current', async (req, res) => {
+  try {
+    const caption = services.transcription.getCurrentCaption(req.params.streamId);
+    res.json(caption || { current: '', translated: null });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get subtitle HTML overlay
+app.get('/transcription/:streamId/overlay', async (req, res) => {
+  try {
+    const html = services.transcription.generateSubtitleHTML(req.params.streamId);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Stop transcription
+app.post('/transcription/:streamId/stop', auth, async (req, res) => {
+  try {
+    services.transcription.stopTranscription(req.params.streamId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get full transcript
+app.get('/transcription/:streamId/transcript', auth, async (req, res) => {
+  try {
+    const transcript = services.transcription.getTranscript(req.params.streamId);
+    res.json(transcript);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export to SRT
+app.get('/transcription/:streamId/export/srt', auth, async (req, res) => {
+  try {
+    const srt = services.transcription.exportToSRT(req.params.streamId);
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="transcript_${req.params.streamId}.srt"`);
+    res.send(srt);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get transcription stats
+app.get('/transcription/:streamId/stats', auth, async (req, res) => {
+  try {
+    const stats = services.transcription.getStats(req.params.streamId);
+    res.json(stats);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
