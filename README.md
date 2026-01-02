@@ -4,15 +4,29 @@ A comprehensive full-stack AI-powered streaming platform with HITL (Human-in-the
 
 ## Features
 
+### AI & Automation
 - **AI-Powered Moderation**: OpenAI-based content moderation with confidence scoring
 - **HITL System**: Human review queue for low-confidence AI predictions
 - **Model Monitoring**: Real-time drift detection and performance tracking
-- **Multi-Guest Streaming**: VDO.Ninja integration for collaborative streams
+- **Smart Director**: AI-driven automatic scene switching based on active speaker detection
+- **Real-Time Transcription**: Whisper API integration with multi-language translation
+- **n8n Automation**: Pre-built workflow templates for production automation
+
+### Production & Streaming
+- **VDO.Ninja Remote Control API**: Complete webhook-based control system
+- **PRISM/OBS WebSocket Integration**: Full scene and audio control
+- **Multi-Guest Streaming**: VDO.Ninja integration for up to 9 guests
 - **Mobile Streaming**: PRISM Live Studio support with QR code setup
 - **Cloud Streaming**: EVMux integration for multi-platform delivery
+- **Studio Mode**: Professional preview/program workflow
+- **Automated Scene Creation**: Dynamic guest scenes and grid layouts
+
+### Platform Features
 - **Real-Time Analytics**: Comprehensive dashboard with performance metrics
 - **Stripe Subscriptions**: Built-in payment processing
 - **Admin Dashboard**: User management and system oversight
+- **WebSocket Real-Time**: Live updates for all production elements
+- **Browser Overlays**: HTML overlays for subtitles and graphics
 
 ## Architecture
 
@@ -33,10 +47,14 @@ The platform follows the 8-step AI MVP framework:
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js
 - **Database**: PostgreSQL 15
-- **WebSockets**: ws library
+- **WebSockets**: ws library + OBS WebSocket
 - **Authentication**: JWT + bcrypt
 - **Payment**: Stripe
-- **AI**: OpenAI API + Ollama
+- **AI Services**:
+  - OpenAI Moderation API
+  - OpenAI Whisper (transcription)
+  - GPT-4 (translation)
+  - Ollama (local chat models)
 
 ### Frontend
 - **Framework**: React 18

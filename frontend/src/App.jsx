@@ -6,6 +6,9 @@ import StreamControl from './components/StreamControl';
 import Analytics from './components/Analytics';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
+import ProductionControl from './components/ProductionControl';
+import SmartDirector from './components/SmartDirector';
+import TranscriptionPanel from './components/TranscriptionPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -76,6 +79,21 @@ function App() {
             path="/admin"
             element={user?.role === 'admin' ? <AdminPanel token={token} /> : <Navigate to="/" />}
           />
+
+          <Route
+            path="/production"
+            element={user ? <ProductionControl token={token} /> : <Navigate to="/login" />}
+          />
+
+          <Route
+            path="/smart-director"
+            element={user ? <SmartDirector token={token} /> : <Navigate to="/login" />}
+          />
+
+          <Route
+            path="/transcription"
+            element={user ? <TranscriptionPanel token={token} /> : <Navigate to="/login" />}
+          />
         </Routes>
       </div>
     </Router>
@@ -90,8 +108,10 @@ const Navigation = ({ onLogout, user }) => (
           <h1 className="text-2xl font-bold text-white">SwanyThree Ultimate</h1>
           <div className="flex gap-4">
             <NavLink to="/">Dashboard</NavLink>
-            <NavLink to="/stream">Stream Control</NavLink>
-            <NavLink to="/hitl">HITL Queue</NavLink>
+            <NavLink to="/production">Production</NavLink>
+            <NavLink to="/smart-director">AI Director</NavLink>
+            <NavLink to="/transcription">Transcription</NavLink>
+            <NavLink to="/hitl">HITL</NavLink>
             <NavLink to="/analytics">Analytics</NavLink>
             {user?.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
           </div>
