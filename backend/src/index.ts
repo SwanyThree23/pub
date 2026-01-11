@@ -12,6 +12,12 @@ import streamRoutes from './routes/stream';
 import platformRoutes from './routes/platform';
 import contentRoutes from './routes/content';
 import apiKeyRoutes from './routes/apiKey';
+import analyticsRoutes from './routes/analytics';
+import webhooksRoutes from './routes/webhooks';
+
+// Import middleware
+import { requestLogger, performanceLogger } from './middleware/logger';
+import { errorHandler, notFound } from './middleware/errorHandler';
 
 // Import core
 import UnifiedPlatform from './core/UnifiedPlatform';
@@ -41,6 +47,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Logging middleware
+if (process.env.NODE_ENV !== 'test') {
+  app.use(requestLogger);
+  app.use(performanceLogger);
+}
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -57,27 +69,24 @@ app.use('/api/streams', streamRoutes);
 app.use('/api/platforms', platformRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/webhooks', webhooksRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    uptime: process.uptime()
   });
 });
 
-// Error handling
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+// 404 handler
+app.use(notFound);
 
-  res.status(err.status || 500).json({
-    error: {
-      message: err.message || 'Internal server error',
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-    }
-  });
-});
+// Error handling middleware
+app.use(errorHandler);
 
 // Start server
 const PORT = process.env.PORT || 4000;
