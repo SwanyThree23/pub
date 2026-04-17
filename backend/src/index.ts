@@ -13,7 +13,9 @@ import platformRoutes from './routes/platform';
 import contentRoutes from './routes/content';
 import apiKeyRoutes from './routes/apiKey';
 import analyticsRoutes from './routes/analytics';
-import webhooksRoutes from './routes/webhooks';
+import webhooksRoutes  from './routes/webhooks';
+import livekitRoutes   from './routes/livekit';
+import healthRoutes    from './routes/health';
 
 // Import middleware
 import { requestLogger, performanceLogger } from './middleware/logger';
@@ -70,16 +72,13 @@ app.use('/api/platforms', platformRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/analytics', analyticsRoutes);
-app.use('/api/webhooks', webhooksRoutes);
+app.use('/api/webhooks',  webhooksRoutes);
+app.use('/api/livekit',   livekitRoutes);
+app.use('/health',        healthRoutes);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    uptime: process.uptime()
-  });
+// Simple root health (healthRoutes handles /health/*)
+app.get('/', (req, res) => {
+  res.json({ service: 'Unified Platform API', status: 'online' });
 });
 
 // 404 handler
