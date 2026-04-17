@@ -1,0 +1,392 @@
+// Prisma Schema for Unified Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  avatarUrl     String?
+  role          UserRole @default(USER)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastLoginAt   DateTime?
+
+  // Relations
+  apiKeys       ApiKey[]
+  streams       Stream[]
+  videos        Video[]
+  voiceClones   VoiceClone[]
+  platforms     UserPlatform[]
+  subscriptions Subscription[]
+
+  @@index([email])
+  @@index([username])
+}
+
+enum UserRole {
+  USER
+  CREATOR
+  ADMIN
+  SUPERADMIN
+}
+
+// API Key Vault (encrypted in Supabase)
+model ApiKey {
+  id          String   @id @default(uuid())
+  userId      String
+  service     String   // heygen, elevenlabs, akool, etc.
+  keyName     String
+  supabaseId  String   // Reference to Supabase vault
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastUsedAt  DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, service, keyName])
+  @@index([userId, service])
+}
+
+// Platform Connections
+model UserPlatform {
+  id            String   @id @default(uuid())
+  userId        String
+  platform      Platform
+  platformUserId String?
+  platformUsername String?
+
+  // Stream keys (encrypted)
+  streamKey     String?
+  rtmpUrl       String?
+
+  isConnected   Boolean  @default(false)
+  isEnabled     Boolean  @default(true)
+
+  // OAuth tokens (encrypted in Supabase vault)
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiresAt DateTime?
+
+  metadata      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastStreamAt  DateTime?
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@index([platform])
+}
+
+enum Platform {
+  YOUTUBE
+  TWITCH
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  TWITTER
+  TIKTOK
+  TELEGRAM
+  AMAZON
+  STEAM
+  KICK
+  RUMBLE
+}
+
+// Streaming Sessions
+model Stream {
+  id            String       @id @default(uuid())
+  userId        String
+  title         String
+  description   String?
+
+  status        StreamStatus @default(PREPARING)
+
+  // VDO.Ninja
+  vdoRoomId     String?
+  vdoDirectorUrl String?
+  vdoGuestUrl   String?
+
+  // EvMux
+  evmuxEventId  String?
+  evmuxJobId    String?
+
+  // Configuration
+  config        Json
+
+  // Timing
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  endedAt       DateTime?
+
+  // Stats
+  totalViewers  Int          @default(0)
+  peakViewers   Int          @default(0)
+  totalMinutes  Int          @default(0)
+
+  metadata      Json?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinations  StreamDestination[]
+  events        StreamEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+enum StreamStatus {
+  PREPARING
+  SCHEDULED
+  STARTING
+  LIVE
+  ENDING
+  ENDED
+  ERROR
+}
+
+// Stream Destinations
+model StreamDestination {
+  id            String   @id @default(uuid())
+  streamId      String
+  platform      Platform
+
+  status        DestinationStatus @default(CONNECTING)
+
+  streamUrl     String?
+  streamKey     String?
+
+  viewerCount   Int      @default(0)
+
+  startedAt     DateTime?
+  endedAt       DateTime?
+
+  error         String?
+  metadata      Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  stream        Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@index([streamId])
+  @@index([platform])
+}
+
+enum DestinationStatus {
+  CONNECTING
+  CONNECTED
+  LIVE
+  DISCONNECTED
+  ERROR
+}
+
+// Stream Events (for analytics)
+model StreamEvent {
+  id          String   @id @default(uuid())
+  streamId    String
+  type        String   // viewer_join, viewer_leave, comment, error, etc.
+  platform    Platform?
+  data        Json
+  timestamp   DateTime @default(now())
+
+  stream      Stream   @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@index([streamId, type])
+  @@index([timestamp])
+}
+
+// AI Generated Videos
+model Video {
+  id            String      @id @default(uuid())
+  userId        String
+  type          VideoType
+
+  title         String?
+  description   String?
+
+  status        JobStatus   @default(PENDING)
+
+  // URLs
+  videoUrl      String?
+  thumbnailUrl  String?
+
+  // Source data
+  sourceData    Json
+
+  // Job tracking
+  jobId         String?
+  provider      String      // heygen, akool, etc.
+
+  // Results
+  duration      Int?        // seconds
+  resolution    String?
+  fileSize      Int?        // bytes
+
+  error         String?
+  metadata      Json?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  completedAt   DateTime?
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+}
+
+enum VideoType {
+  AVATAR
+  TRANSLATED
+  IMAGE_TO_VIDEO
+  FACE_SWAP
+  CUSTOM
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Voice Clones
+model VoiceClone {
+  id            String    @id @default(uuid())
+  userId        String
+  name          String
+  description   String?
+
+  status        JobStatus @default(PENDING)
+
+  voiceId       String?   // Provider's voice ID
+  provider      String    // elevenlabs, heygen, etc.
+
+  sampleUrls    String[]
+  previewUrl    String?
+
+  settings      Json?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  completedAt   DateTime?
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([provider])
+}
+
+// Subscriptions
+model Subscription {
+  id            String            @id @default(uuid())
+  userId        String
+  plan          SubscriptionPlan
+  status        SubscriptionStatus @default(ACTIVE)
+
+  // Limits
+  monthlyMinutes  Int
+  usedMinutes     Int             @default(0)
+
+  platformsLimit  Int
+  videosLimit     Int
+
+  // Billing
+  priceId       String?
+  customerId    String?
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+
+  cancelAt      DateTime?
+  canceledAt    DateTime?
+
+  metadata      Json?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// Service Health Monitoring
+model ServiceHealth {
+  id            String   @id @default(uuid())
+  service       String   @unique
+  status        String   // operational, degraded, down
+  lastCheck     DateTime @default(now())
+  responseTime  Int?     // milliseconds
+  error         String?
+  metadata      Json?
+
+  updatedAt     DateTime @updatedAt
+
+  @@index([service])
+  @@index([status])
+}
+
+// Job Queue (for monitoring BullMQ)
+model QueueJob {
+  id            String    @id @default(uuid())
+  queueName     String
+  jobId         String
+  type          String
+
+  status        String    // waiting, active, completed, failed
+
+  data          Json
+  result        Json?
+  error         String?
+
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(3)
+
+  createdAt     DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  @@unique([queueName, jobId])
+  @@index([queueName, status])
+  @@index([createdAt])
+}
