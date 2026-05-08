@@ -55,6 +55,18 @@ services.obs.connect().catch(err => {
   console.warn('⚠️  OBS WebSocket not available:', err.message);
 });
 
+// ── WebSocket broadcast helper ────────────────────────────────────────
+const broadcast = (payload) => {
+  const data = JSON.stringify(payload);
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(data);
+  });
+};
+
+wss.on('connection', ws => {
+  ws.send(JSON.stringify({ type: 'connected', message: 'SwanyThree WS ready' }));
+});
+
 // Auth Middleware
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -474,6 +486,7 @@ app.post('/obs/scene/current', auth, async (req, res) => {
   try {
     const { sceneName } = req.body;
     await services.obs.setCurrentScene(sceneName);
+    broadcast({ type: 'scene_switch', scene: sceneName, ts: Date.now() });
     res.json({ success: true, scene: sceneName });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -620,6 +633,7 @@ app.post('/smart-director/manual-switch', auth, async (req, res) => {
   try {
     const { roomId, guestSlot } = req.body;
     await services.smartDirector.manualSwitch(roomId, guestSlot);
+    broadcast({ type: 'scene_switch', scene: `Guest_${guestSlot}`, manual: true, ts: Date.now() });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

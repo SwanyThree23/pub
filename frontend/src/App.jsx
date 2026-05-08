@@ -98,7 +98,7 @@ function App() {
 
           <Route
             path="/seewhy"
-            element={user ? <SeeWhyLIVE /> : <Navigate to="/login" />}
+            element={user ? <SeeWhyLIVE token={token} /> : <Navigate to="/login" />}
           />
         </Routes>
       </div>

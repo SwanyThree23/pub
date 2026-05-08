@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Activity, Users, MessageSquare, Radio } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -93,9 +94,10 @@ const QuickActions = () => (
   <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
     <h2 className="text-2xl font-bold text-white mb-4">Quick Actions</h2>
     <div className="space-y-3">
-      <ActionButton href="/stream" label="Start New Stream" color="purple" />
-      <ActionButton href="/hitl" label="Review Moderation Queue" color="yellow" />
-      <ActionButton href="/analytics" label="View Analytics" color="blue" />
+      <ActionButton href="/seewhy"     label="🎬 Open SeeWhy LIVE Studio"  color="purple" />
+      <ActionButton href="/production" label="📡 Production Control"        color="blue" />
+      <ActionButton href="/hitl"       label="👥 Review Moderation Queue"   color="yellow" />
+      <ActionButton href="/analytics"  label="📊 View Analytics"            color="blue" />
     </div>
   </div>
 );
@@ -108,12 +110,12 @@ const ActionButton = ({ href, label, color }) => {
   };
 
   return (
-    <a
-      href={href}
+    <Link
+      to={href}
       className={`block bg-gradient-to-r ${colors[color]} text-white py-3 px-6 rounded-lg font-semibold hover:opacity-90 transition-all text-center`}
     >
       {label}
-    </a>
+    </Link>
   );
 };
 

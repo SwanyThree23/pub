@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const WS_URL  = (import.meta.env.VITE_API_URL || "http://localhost:3000").replace(/^http/, "ws");
+
 const T = {
   burgundy: "#800020", burgundyDeep: "#5a0016", gold: "#C9A84C",
   acidGreen: "#39FF14", violet: "#7B3FF2", cyan: "#00B2FF",
@@ -204,7 +207,7 @@ const AUDIENCE = [
 
 const TIERS = [{ label:"Bronze",price:"$1" },{ label:"Silver",price:"$5" },{ label:"Gold",price:"$15" }];
 
-export default function SeeWhyLIVE() {
+export default function SeeWhyLIVE({ token }) {
   const [activeTab,    setActiveTab]    = useState("studio");
   const [sidebarTab,   setSidebarTab]   = useState("chat");
   const [spotlight,    setSpotlight]    = useState(null);
@@ -223,8 +226,11 @@ export default function SeeWhyLIVE() {
   const [wpProgress,   setWpProgress]   = useState(12);
   const [guests,       setGuests]       = useState(GUESTS);
   const [earnings,     setEarnings]     = useState(47.50);
+  const [liveStats,    setLiveStats]    = useState(null);
+  const [moderating,   setModerating]   = useState(false);
   const chatRef  = useRef(null);
   const timerRef = useRef(null);
+  const wsRef    = useRef(null);
 
   useEffect(() => {
     const el = document.createElement("style");
@@ -268,11 +274,71 @@ export default function SeeWhyLIVE() {
     return () => clearInterval(t);
   }, []);
 
-  const sendChat = useCallback(() => {
-    if (!chatMsg.trim()) return;
-    setMessages(m => [...m, { id: Date.now(), user: "You", badge: null, text: chatMsg, time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) }]);
+  // Fetch live analytics from backend
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/analytics/overview`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) setLiveStats(await res.json());
+      } catch { /* backend offline — keep mock data */ }
+    };
+    fetchStats();
+    const t = setInterval(fetchStats, 15000);
+    return () => clearInterval(t);
+  }, [token]);
+
+  // WebSocket — receive scene switch + audio level events
+  useEffect(() => {
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "scene_switch") {
+          setMessages(m => [...m, {
+            id: Date.now(), user: "SwanyBot", badge: "mod",
+            text: `Scene switched → ${msg.scene}`,
+            time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })
+          }]);
+        }
+        if (msg.type === "chat") {
+          setMessages(m => [...m, {
+            id: msg.id || Date.now(), user: msg.user, badge: null,
+            text: msg.text, time: msg.time || ""
+          }]);
+        }
+      } catch { /* ignore malformed */ }
+    };
+    return () => ws.close();
+  }, []);
+
+  const sendChat = useCallback(async () => {
+    if (!chatMsg.trim() || moderating) return;
+    const text = chatMsg;
     setChatMsg("");
-  }, [chatMsg]);
+    setModerating(true);
+    try {
+      const res = await fetch(`${API_URL}/chat/moderate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ message: text, username: "You", streamId: "seewhy-live" })
+      });
+      const data = res.ok ? await res.json() : null;
+      const blocked = data?.action === "remove";
+      setMessages(m => [...m,
+        blocked
+          ? { id: Date.now(), user: "GuardianAI", badge: "mod", text: "⚠️ Message blocked by Guardian AI", time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) }
+          : { id: Date.now(), user: "You", badge: null, text, time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) }
+      ]);
+    } catch {
+      // Backend unreachable — show message unmoderated
+      setMessages(m => [...m, { id: Date.now(), user: "You", badge: null, text, time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) }]);
+    } finally {
+      setModerating(false);
+    }
+  }, [chatMsg, moderating, token]);
 
   const addReaction = useCallback(emoji => {
     const id = Date.now();
@@ -458,12 +524,12 @@ export default function SeeWhyLIVE() {
                 <div style={{ fontFamily:"'Orbitron',sans-serif",fontSize:10,color:"rgba(245,230,211,.4)",letterSpacing:2,marginBottom:24 }}>TOTAL EARNINGS TODAY</div>
               </div>
               {[
-                { label:"Live Viewers",     value:"3,242", icon:"👥" },
-                { label:"Rooms Live",       value:"1,247", icon:"📡" },
-                { label:"Creator Split",    value:"90%",   icon:"💰", color:T.gold },
-                { label:"Platform Fee",     value:"10%",   icon:"🏛", color:T.burgundy },
-                { label:"Tips Received",    value:"$12.50",icon:"💎" },
-                { label:"New Subscribers",  value:"8",     icon:"⭐" },
+                { label:"Total Streams",        value: liveStats?.total_streams   ?? "—",    icon:"📡" },
+                { label:"Messages Moderated",   value: liveStats?.total_messages  ?? "—",    icon:"💬" },
+                { label:"Human Reviews",        value: liveStats?.human_reviews   ?? "—",    icon:"👥" },
+                { label:"Avg Toxicity",         value: liveStats ? `${((liveStats.avg_toxicity||0)*100).toFixed(1)}%` : "—", icon:"⚠️" },
+                { label:"Creator Split",        value:"90%",   icon:"💰", color:T.gold },
+                { label:"Platform Fee",         value:"10%",   icon:"🏛", color:T.burgundy },
               ].map(s => (
                 <div key={s.label} style={{ background:T.umber,border:`1px solid ${T.burgundy}30`,borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10 }}>
@@ -522,9 +588,9 @@ export default function SeeWhyLIVE() {
                 ))}
               </div>
               <div className="chat-input-row">
-                <input className="chat-input" placeholder="Say something..." value={chatMsg}
-                  onChange={e => setChatMsg(e.target.value)} onKeyDown={e => e.key==="Enter" && sendChat()} />
-                <button className="chat-send" onClick={sendChat}>➤</button>
+                <input className="chat-input" placeholder={moderating ? "Checking..." : "Say something..."} value={chatMsg}
+                  onChange={e => setChatMsg(e.target.value)} onKeyDown={e => e.key==="Enter" && sendChat()} disabled={moderating} />
+                <button className="chat-send" onClick={sendChat} disabled={moderating} style={{ opacity: moderating ? 0.5 : 1 }}>➤</button>
               </div>
             </>
           )}
