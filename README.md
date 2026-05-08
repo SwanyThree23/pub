@@ -1,115 +1,145 @@
-# SwanyThree Ultimate - AI Streaming Platform
+# SwanyThree Ultimate — AI Streaming Platform
 
-A comprehensive full-stack AI-powered streaming platform integrating VDO.Ninja multi-guest streaming, PRISM Live Studio automation, AI-driven scene switching, real-time transcription, and Human-in-the-Loop moderation.
+Full-stack AI streaming platform: VDO.Ninja multi-guest, PRISM Live Studio automation, AI scene switching, live transcription, HITL moderation, and the **SeeWhy LIVE** broadcast UI built from 17 production screenshots.
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
+- [SeeWhy LIVE UI](#seewhy-live-ui)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
+- [Environment Variables](#environment-variables)
 - [Quick Start](#quick-start)
-- [Production Setup](#production-setup)
+- [Docker Services](#docker-services)
+- [Database Schema](#database-schema)
 - [Frontend Pages](#frontend-pages)
 - [API Reference](#api-reference)
 - [Services](#services)
 - [n8n Automation](#n8n-automation)
 - [HITL Workflow](#hitl-workflow)
-- [Model Monitoring](#model-monitoring)
+- [Troubleshooting](#troubleshooting)
 - [Default Credentials](#default-credentials)
-- [Success Metrics](#success-metrics)
+- [Supplementary Docs](#supplementary-docs)
 
 ---
 
 ## Features
 
+### SeeWhy LIVE Broadcast UI
+- Octagonal panel grid — 8-guest stage with `clip-path` octagons, cyan speaker glow, gold host ring
+- Double-click spotlight — expands any panel to 2×2 featured view
+- Social feed + story rings — LIVE-badged avatars, room cards with viewer counts
+- PK Battle — animated split-score progress bar
+- Watch Party — ±0ms sync badge, host-controlled scrubber, floating emoji reactions
+- 120s Golden Paywall — Bronze / Silver / Gold tier selector before free preview expires
+- Go Live modal — Single Cam / Panel / Audio Room type cards with permission grants
+- Guardian AI HUD — LLMLingua compression stats in chat header
+- Multilingual chat — auto-translated messages shown in italics below original
+- Revenue sidebar — live 90/10 earnings ticker with stacked bar visualization
+- Guests panel — per-guest CAM ON / NO FEED status, MUTE button, speaking indicator
+
 ### AI & Automation
-- **AI Smart Director** — Automatic scene switching based on active speaker detection with configurable thresholds, hold times, and manual override
-- **Real-Time Transcription** — OpenAI Whisper integration for live speech-to-text with 500ms latency
-- **Live Translation** — GPT-4 powered multi-language translation with browser overlay output
-- **AI Moderation** — OpenAI Moderation API with confidence scoring and fallback to Ollama
-- **HITL Queue** — Human review queue for low-confidence AI decisions with ground truth collection
-- **Model Drift Detection** — Real-time monitoring for accuracy degradation
-- **n8n Workflows** — Pre-built automation templates for scene switching, guest muting, and alerts
+- **AI Smart Director** — automatic scene switching on active speaker detection
+- **Real-Time Transcription** — Whisper API, 500ms latency, SRT export
+- **Live Translation** — GPT-4 multi-language with browser overlay output
+- **AI Moderation** — OpenAI Moderation API + Ollama fallback
+- **HITL Queue** — human review for low-confidence decisions
+- **Model Drift Detection** — accuracy degradation alerts
+- **n8n Workflows** — pre-built automation templates
 
 ### Production & Streaming
-- **VDO.Ninja Remote Control API** — Complete webhook-based control for guest audio, volume, and scenes via `https://api.vdo.ninja/{API_KEY}/{ACTION}/{VALUE}`
-- **PRISM/OBS WebSocket** — Full programmatic control of PRISM Live Studio (built on OBS): scene switching, audio mixing, streaming start/stop, Studio Mode
-- **Multi-Guest Streaming** — VDO.Ninja integration supporting up to 9 simultaneous guests
-- **Automated Scene Creation** — Dynamic per-guest scenes and responsive grid layouts auto-created in OBS on room creation
-- **Studio Mode** — Professional preview/program workflow for broadcast production
-- **Browser Source Overlays** — HTML subtitle and graphics overlays served directly by the backend
-- **Mobile Streaming** — PRISM Live Studio support with QR code guest invites
-- **Cloud Delivery** — EVMux integration for multi-platform streaming (YouTube, Twitch, Facebook)
+- **VDO.Ninja Remote Control API** — complete webhook control via `https://api.vdo.ninja/{key}/{action}/{value}`
+- **PRISM / OBS WebSocket** — scene switching, audio mixing, streaming start/stop, Studio Mode
+- **Multi-Guest** — up to 9 simultaneous VDO.Ninja guests
+- **Automated Scene Creation** — per-guest scenes + responsive grid layouts on room creation
+- **Browser Source Overlays** — subtitle HTML served directly by backend
+- **EVMux Cloud Delivery** — multi-platform RTMP (YouTube, Twitch, Facebook)
 
 ### Platform
-- **Real-Time Analytics** — Live dashboard with viewer counts, engagement, and AI performance KPIs
-- **Stripe Subscriptions** — Built-in tiered payment processing
-- **Admin Dashboard** — User management, role assignment, and system oversight
-- **WebSocket Events** — Live push updates for all production and moderation events
-- **SRT Export** — Post-stream subtitle file generation for VOD publishing
+- Real-time analytics dashboard
+- Stripe tiered subscriptions
+- Admin dashboard — user management, role assignment
+- WebSocket push events for all production and moderation activity
+
+---
+
+## SeeWhy LIVE UI
+
+Route: `/seewhy`  
+Component: `frontend/src/components/SeeWhyLIVE.jsx`
+
+Built from analysis of 17 production screenshots (VibePreview, Fanbase, Bigo LIVE PK, Base44, Hostinger, Chatter, Kick embed panels).
+
+| Tab | What it shows |
+|---|---|
+| Explore | Story rings, live room cards (2-col grid), PK Battle score bar |
+| Studio | 4×4 octagonal panel grid, audience row, cam/mute/end controls |
+| Watch Party | Video embed, ±0ms sync, emoji reactions, host scrubber, 120s paywall |
+| Analytics | Live earnings ticker, stat cards, 90/10 revenue bar |
+
+Sidebar tabs: **Chat** (Guardian AI HUD, multilingual messages, tip cards) · **Revenue** (earnings + tier table) · **Guests** (per-guest status + mute)
+
+Design tokens: Burgundy `#800020` · Gold `#C9A84C` · Acid Green `#39FF14` · Cyan `#00B2FF` · Near Black `#0A0608`  
+Fonts: Bebas Neue · Orbitron · Barlow Condensed · DM Mono
 
 ---
 
 ## Architecture
 
-The platform follows the 8-step AI MVP framework:
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                   SwanyThree Ultimate                        │
-│                                                             │
-│  React Frontend (Vite + TailwindCSS)                        │
-│  ├── Production Control  (VDO.Ninja room + scene switcher)  │
-│  ├── AI Smart Director   (active speaker dashboard)         │
-│  ├── Transcription Panel (live captions + translation)      │
-│  ├── HITL Queue          (moderation review)                │
-│  ├── Analytics           (KPI dashboard)                    │
-│  └── Admin Panel         (user management)                  │
-│                                                             │
-│  Express Backend (Node.js 18+)                              │
-│  ├── VDONinjaService     (remote control webhooks)          │
-│  ├── OBSWebSocketService (PRISM/OBS automation)             │
-│  ├── SmartDirectorService(AI scene switching)               │
-│  ├── TranscriptionService(Whisper + GPT-4 translation)      │
-│  ├── AIService           (moderation + chat)                │
-│  ├── HITLService         (human review queue)               │
-│  ├── MonitoringService   (drift detection)                  │
-│  ├── PRISMService        (mobile setup)                     │
-│  └── EVMuxService        (cloud streaming)                  │
-│                                                             │
-│  Infrastructure                                             │
-│  ├── PostgreSQL 15        (datasets + ground truth)         │
-│  ├── Ollama               (local AI models)                 │
-│  ├── n8n                  (workflow automation)             │
-│  └── Prometheus           (metrics)                         │
-└─────────────────────────────────────────────────────────────┘
+Frontend (React 18 + Vite)
+├── /             Dashboard
+├── /seewhy       SeeWhy LIVE broadcast UI   ← NEW
+├── /production   VDO.Ninja room + scene switcher
+├── /smart-director  AI auto-switching
+├── /transcription   Live captions
+├── /hitl         Human review queue
+├── /stream       Stream control
+├── /analytics    KPI dashboard
+└── /admin        User management
+
+Backend (Express + Node 18)
+├── VDONinjaService     webhook remote control
+├── OBSWebSocketService PRISM automation
+├── SmartDirectorService AI scene switching
+├── TranscriptionService Whisper + GPT-4
+├── AIService           moderation + chat
+├── HITLService         review queue
+├── MonitoringService   drift detection
+├── PRISMService        mobile setup
+└── EVMuxService        cloud streaming
+
+Infrastructure
+├── PostgreSQL 15   dataset + ground truth
+├── Ollama          local AI (ministral-3b)
+├── n8n             workflow automation
+└── Prometheus      metrics
 ```
 
-### Data Flow: VDO.Ninja → PRISM
+### VDO.Ninja → PRISM data flow
 
 ```
 Guests (browser) ──push──► VDO.Ninja Room
                                 │
-                         Director URL (you)
+                     SmartDirectorService
+                     (audio level polling)
                                 │
-                    SmartDirectorService (audio levels)
+                     OBSWebSocketService
+                     (SetCurrentScene)
                                 │
-                    OBSWebSocketService (scene switch)
-                                │
-                    PRISM Browser Source ──RTMP──► Platforms
+                  PRISM Browser Source ──RTMP──► Platforms
 ```
 
 ---
 
 ## Tech Stack
 
-### Backend
-| Component | Technology |
+| Layer | Technology |
 |---|---|
-| Runtime | Node.js 18+ |
-| Framework | Express.js |
+| Frontend | React 18, Vite, TailwindCSS, React Router v6, Lucide React |
+| Backend | Node.js 18, Express.js |
 | Database | PostgreSQL 15 |
 | WebSockets | ws + obs-websocket-js |
 | Auth | JWT + bcrypt |
@@ -119,124 +149,149 @@ Guests (browser) ──push──► VDO.Ninja Room
 | AI — Translation | GPT-4 |
 | AI — Chat | Ollama (ministral-3b) |
 | HTTP Client | node-fetch |
-
-### Frontend
-| Component | Technology |
-|---|---|
-| Framework | React 18 |
-| Build | Vite |
-| Styling | TailwindCSS |
-| Routing | React Router v6 |
-| Icons | Lucide React |
-
-### Infrastructure
-| Component | Technology |
-|---|---|
 | Containers | Docker + Docker Compose |
 | Monitoring | Prometheus |
 | Automation | n8n |
-| Streaming | VDO.Ninja + PRISM Live Studio |
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in all values.
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | Secret for signing JWT tokens |
+| `OPENAI_KEY` | Yes | OpenAI API key (Whisper + GPT-4 + Moderation) |
+| `OLLAMA_URL` | No | Ollama base URL (default `http://localhost:11434`) |
+| `STRIPE_SECRET_KEY` | No | Stripe secret key for payments |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `PORT` | No | Backend port (default `3000`) |
+| `NODE_ENV` | No | `development` or `production` |
+| `FRONTEND_URL` | No | Frontend URL for CORS (default `http://localhost:5173`) |
+| `VITE_API_URL` | No | Backend URL used by frontend (default `http://localhost:3000`) |
+| `OBS_WEBSOCKET_HOST` | No | PRISM/OBS WebSocket host:port (default `localhost:4455`) |
+| `OBS_WEBSOCKET_PASSWORD` | No | PRISM/OBS WebSocket password |
+| `VDO_NINJA_API_ENABLED` | No | Enable VDO.Ninja Remote Control API (`true`/`false`) |
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-- Docker and Docker Compose
-- Node.js 18+
-- OpenAI API key
-- PRISM Live Studio (free download) with OBS WebSocket enabled
-- Stripe account (optional)
-
-### 1. Clone and configure
-
 ```bash
-git clone <repository-url>
-cd pub
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```env
-# Required
-OPENAI_API_KEY=sk-...
-JWT_SECRET=your-secret-here
-DATABASE_URL=postgresql://admin:password@localhost:5432/swanythree
-
-# PRISM / OBS WebSocket (Tools > WebSocket Server in PRISM)
-OBS_WEBSOCKET_HOST=localhost:4455
-OBS_WEBSOCKET_PASSWORD=your_obs_password
-
-# Optional
-STRIPE_SECRET_KEY=sk_test_...
-VDO_NINJA_API_ENABLED=true
-```
-
-### 2. Start services
-
-```bash
+git clone <repository-url> && cd pub
+cp .env.example .env          # add OPENAI_KEY at minimum
 docker-compose up -d
-```
-
-### 3. Initialize database
-
-```bash
+# wait ~10s for postgres
 docker exec -it swanythree-postgres psql -U admin -d swanythree -f /docker-entrypoint-initdb.d/init.sql
-```
-
-### 4. Pull AI model
-
-```bash
 docker exec swanythree-ollama ollama pull ministral-3b
 ```
 
-### 5. Enable OBS WebSocket in PRISM
+Open http://localhost:5173 — log in as `admin@swanythree.com` / `admin123`.
 
-1. Open PRISM Live Studio
-2. Go to **Tools → WebSocket Server Settings**
-3. Enable WebSocket server, set port `4455`
-4. Set a password and copy it to `.env`
+### Enable PRISM WebSocket
 
-### Access Points
+1. Open PRISM Live Studio → **Tools → WebSocket Server Settings**
+2. Enable, set port `4455`, set a password
+3. Add to `.env`: `OBS_WEBSOCKET_HOST=localhost:4455` and `OBS_WEBSOCKET_PASSWORD=yourpass`
+4. Restart backend: `docker-compose restart backend`
 
-| Service | URL |
-|---|---|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:3000 |
-| Health Check | http://localhost:3000/health |
-| Prometheus | http://localhost:9090 |
+### Start your first production
+
+1. Go to **Production** → Create Production Room (auto-creates 4 guest scenes in PRISM)
+2. Share the Guest URL with guests
+3. Go to **AI Director** → enter room ID → Start AI Director
+4. Go to **Transcription** → Start → copy overlay URL → add as Browser Source in PRISM
 
 ---
 
-## Production Setup
+## Docker Services
 
-### Start Your First Production
+| Container | Image | Port | Purpose |
+|---|---|---|---|
+| `swanythree-postgres` | postgres:15 | 5432 | Primary database |
+| `swanythree-backend` | local build | 3000 | Express API |
+| `swanythree-frontend` | local build | 5173 | React app |
+| `swanythree-ollama` | ollama/ollama | 11434 | Local AI models |
+| `swanythree-prometheus` | prom/prometheus | 9090 | Metrics |
 
-1. Navigate to **Production** in the nav bar
-2. Click **Create Production Room** — this creates a VDO.Ninja room and auto-creates 4 guest scenes + a grid scene in PRISM
-3. Share the **Guest URL** with your guests (or generate individual QR links)
-4. Open the **Director URL** in your browser to monitor guests
+Volumes: `postgres_data` · `ollama_data` · `prometheus_data`
 
-### Enable AI Scene Switching
+Health check: `curl http://localhost:3000/health`
 
-1. Navigate to **AI Director**
-2. Enter the room ID from Production Control
-3. Set guest slots (default: `1,2,3,4`)
-4. Tune the configuration sliders:
-   - **Switch Delay** — minimum ms between scene changes (default 1000)
-   - **Hold Time** — how long a speaker must talk before switching (default 3000)
-   - **Silence Threshold** — audio level to count as "speaking" (default 20)
-5. Click **Start AI Director** — scenes will switch automatically to the active speaker
+---
 
-### Enable Live Transcription
+## Database Schema
 
-1. Navigate to **Transcription**
-2. Enter your stream ID
-3. Choose source and target languages
-4. Click **Start Transcription**
-5. Copy the **Overlay URL** and add it as a Browser Source in PRISM (1920×1080)
+Tables are defined in `backend/src/db/schema.sql`.
+
+### users
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| username | VARCHAR(255) UNIQUE | |
+| email | VARCHAR(255) UNIQUE | |
+| password_hash | TEXT | bcrypt |
+| role | VARCHAR(50) | `user` · `moderator` · `admin` |
+| subscription_status | VARCHAR(50) | `inactive` · `active` |
+| created_at / updated_at | TIMESTAMP | |
+
+### streams
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| user_id | FK → users | cascade delete |
+| evmux_id | VARCHAR(255) UNIQUE | cloud stream ID |
+| name | VARCHAR(255) | |
+| status | VARCHAR(50) | `offline` · `live` |
+| created_at / started_at / ended_at | TIMESTAMP | |
+
+### chat_messages
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| stream_id | FK → streams | |
+| username | VARCHAR(255) | |
+| message | TEXT | |
+| toxicity_score | FLOAT | 0–1 |
+| ai_confidence | FLOAT | 0–1 |
+| human_reviewed | BOOLEAN | |
+| final_decision | VARCHAR(50) | ground truth |
+
+### hitl_reviews
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| review_type | VARCHAR(50) | |
+| data | JSONB | raw payload |
+| status | VARCHAR(50) | `pending` · `completed` |
+| assigned_to | FK → users | reviewer |
+| decision | VARCHAR(50) | human label |
+| feedback | TEXT | |
+| created_at / completed_at | TIMESTAMP | |
+
+### model_metrics
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| model_name | VARCHAR(100) | |
+| prediction_input | TEXT | |
+| prediction_output | JSONB | |
+| confidence | FLOAT | |
+| ground_truth | VARCHAR(50) | from HITL |
+
+### vdo_rooms
+| Column | Type | Notes |
+|---|---|---|
+| id | SERIAL PK | |
+| user_id | FK → users | |
+| room_id | VARCHAR(100) UNIQUE | VDO.Ninja room ID |
+| name | VARCHAR(255) | |
+| password | VARCHAR(255) | optional |
+| status | VARCHAR(50) | `active` |
+
+**Indexes:** `streams(user_id)`, `streams(status)`, `chat_messages(stream_id)`, `chat_messages(human_reviewed)`, `hitl_reviews(status)`, `hitl_reviews(assigned_to)`, `model_metrics(model_name)`, `model_metrics(created_at)`
 
 ---
 
@@ -244,214 +299,127 @@ docker exec swanythree-ollama ollama pull ministral-3b
 
 | Route | Component | Description |
 |---|---|---|
-| `/` | `Dashboard` | Overview with live stats |
-| `/production` | `ProductionControl` | VDO.Ninja room + scene switcher + guest audio |
-| `/smart-director` | `SmartDirector` | AI auto-switching dashboard + manual override |
-| `/transcription` | `TranscriptionPanel` | Live captions, translation, SRT export |
-| `/hitl` | `HITLQueue` | Human moderation review queue |
-| `/stream` | `StreamControl` | Stream management |
-| `/analytics` | `Analytics` | KPI and performance charts |
-| `/admin` | `AdminPanel` | User management (admin only) |
+| `/` | Dashboard | Overview + live stats |
+| `/seewhy` | SeeWhyLIVE | Full broadcast UI from screenshots |
+| `/production` | ProductionControl | VDO.Ninja room + scene switcher + guest audio |
+| `/smart-director` | SmartDirector | AI auto-switching + manual override |
+| `/transcription` | TranscriptionPanel | Live captions, translation, SRT export |
+| `/hitl` | HITLQueue | Human moderation review queue |
+| `/stream` | StreamControl | Stream management |
+| `/analytics` | Analytics | KPI + performance charts |
+| `/admin` | AdminPanel | User management (admin only) |
 
 ---
 
 ## API Reference
 
-### Authentication
-
+### Auth
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/auth/register` | Create account |
-| POST | `/auth/login` | Get JWT token |
+| POST | `/auth/login` | Get JWT |
 
 ### VDO.Ninja Remote Control
-
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/vdo/room/create` | Create room with API enabled |
-| POST | `/vdo/room/:id/guest-link` | Generate named guest invite link |
-| POST | `/vdo/webhook/:roomId/:action` | Execute arbitrary API webhook |
+| POST | `/vdo/room/create` | Create room |
+| POST | `/vdo/room/:id/guest-link` | Generate guest invite |
+| POST | `/vdo/webhook/:roomId/:action` | Execute API webhook |
 | POST | `/vdo/room/:id/mute` | Mute entire room |
 | POST | `/vdo/room/:id/unmute` | Unmute entire room |
-| POST | `/vdo/room/:id/guest/:slot/mute` | Mute individual guest |
-| POST | `/vdo/room/:id/guest/:slot/unmute` | Unmute individual guest |
-| POST | `/vdo/room/:id/guest/:slot/volume` | Set guest volume (0–100) |
-| POST | `/vdo/room/:id/scene/:num` | Switch to scene number |
-| POST | `/vdo/room/:id/scene/:num/guest/:slot` | Assign guest to scene |
-| POST | `/vdo/room/:id/scenes` | Create multiple scenes |
-| POST | `/vdo/room/:id/audio-level` | Report audio level (for AI detection) |
-| GET  | `/vdo/room/:id/active-speaker` | Get current active speaker slot |
-| GET  | `/vdo/room/:id/browser-url/:slot` | Get browser-capture URL for PRISM |
-| GET  | `/vdo/room/:id/n8n-workflow` | Get n8n webhook config for this room |
+| POST | `/vdo/room/:id/guest/:slot/mute` | Mute guest |
+| POST | `/vdo/room/:id/guest/:slot/unmute` | Unmute guest |
+| POST | `/vdo/room/:id/guest/:slot/volume` | Set volume 0–100 |
+| POST | `/vdo/room/:id/scene/:num` | Switch scene |
+| POST | `/vdo/room/:id/audio-level` | Report audio level |
+| GET  | `/vdo/room/:id/active-speaker` | Get active speaker slot |
+| GET  | `/vdo/room/:id/browser-url/:slot` | Browser-capture URL for PRISM |
+| GET  | `/vdo/room/:id/n8n-workflow` | n8n webhook config |
 
-### OBS / PRISM WebSocket
-
+### OBS / PRISM
 | Method | Endpoint | Description |
 |---|---|---|
 | GET  | `/obs/scenes` | List all scenes |
 | GET  | `/obs/scene/current` | Get active scene |
 | POST | `/obs/scene/current` | Switch program scene |
-| POST | `/obs/scene/preview` | Set preview scene (Studio Mode) |
-| POST | `/obs/transition` | Trigger scene transition |
-| POST | `/obs/scenes/guest` | Create guest scene with browser source |
+| POST | `/obs/scene/preview` | Set Studio Mode preview |
+| POST | `/obs/transition` | Trigger transition |
+| POST | `/obs/scenes/guest` | Create guest scene + browser source |
 | POST | `/obs/scenes/grid` | Create responsive grid scene |
-| POST | `/obs/audio/mute` | Mute/unmute audio source |
+| POST | `/obs/audio/mute` | Mute/unmute source |
 | POST | `/obs/audio/volume` | Set source volume |
-| POST | `/obs/streaming/start` | Start streaming |
-| POST | `/obs/streaming/stop` | Stop streaming |
-| POST | `/obs/studio-mode` | Enable/disable Studio Mode |
-| GET  | `/obs/stats` | Get OBS performance stats |
+| POST | `/obs/streaming/start` | Start stream |
+| POST | `/obs/streaming/stop` | Stop stream |
+| POST | `/obs/studio-mode` | Toggle Studio Mode |
+| GET  | `/obs/stats` | OBS performance stats |
 
 ### AI Smart Director
-
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/smart-director/start` | Start auto-switching session |
-| POST | `/smart-director/stop` | Stop auto-switching session |
-| POST | `/smart-director/manual-switch` | Override — switch to specific guest |
-| GET  | `/smart-director/stats/:roomId` | Get switch history + current speaker |
+| POST | `/smart-director/start` | Start session |
+| POST | `/smart-director/stop` | Stop session |
+| POST | `/smart-director/manual-switch` | Override to specific guest |
+| GET  | `/smart-director/stats/:roomId` | Switch history + current speaker |
 | PATCH | `/smart-director/config/:roomId` | Update AI config live |
 
-### Transcription
+**Config options:** `switchDelay` (ms, default 1000) · `holdTime` (ms, default 3000) · `silenceThreshold` (0–100, default 20) · `confidenceThreshold` (0–1, default 0.7)
 
+### Transcription
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/transcription/start` | Start Whisper transcription session |
-| POST | `/transcription/:id/chunk` | Submit audio chunk for processing |
+| POST | `/transcription/start` | Start Whisper session |
+| POST | `/transcription/:id/chunk` | Submit audio chunk |
 | POST | `/transcription/:id/stop` | Stop session |
-| GET  | `/transcription/:id/current` | Get current live caption |
-| GET  | `/transcription/:id/overlay` | HTML subtitle overlay (for PRISM browser source) |
-| GET  | `/transcription/:id/transcript` | Full transcript text |
-| GET  | `/transcription/:id/export/srt` | Download SRT subtitle file |
+| GET  | `/transcription/:id/current` | Live caption |
+| GET  | `/transcription/:id/overlay` | HTML subtitle overlay |
+| GET  | `/transcription/:id/export/srt` | Download SRT |
 | GET  | `/transcription/:id/stats` | Session statistics |
 
-### AI Moderation
-
+### Moderation & Admin
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/chat/moderate` | Moderate a chat message |
-| GET  | `/hitl/queue` | Fetch human review queue |
+| POST | `/chat/moderate` | Moderate message |
+| GET  | `/hitl/queue` | Human review queue |
 | POST | `/hitl/review/:id` | Submit human decision |
-
-### Streaming
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/streams/create` | Create stream |
-| POST | `/streams/:id/start` | Start stream |
-| POST | `/streams/:id/stop` | Stop stream |
-| GET  | `/streams` | List streams |
-
-### Analytics
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/analytics/overview` | Platform KPI summary |
-| GET | `/monitoring/model-performance` | AI model metrics |
-
-### Admin
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/admin/users` | List all users |
-| PATCH | `/admin/users/:id/role` | Update user role |
+| GET  | `/analytics/overview` | Platform KPI summary |
+| GET  | `/monitoring/model-performance` | AI model metrics |
+| GET  | `/admin/users` | List users |
+| PATCH | `/admin/users/:id/role` | Update role |
 
 ---
 
 ## Services
 
-### VDONinjaService (`backend/src/services/VDONinjaService.js`)
-
-Manages VDO.Ninja rooms and executes Remote Control API webhooks.
-
-```
-VDONinjaService
-├── createRoom()           — generate room with optional API key
-├── generateGuestLink()    — named guest invite URL
-├── executeWebhook()       — call https://api.vdo.ninja/{key}/{action}/{value}
-├── muteGuest()            — mute individual guest
-├── unmuteGuest()          — unmute individual guest
-├── setGuestVolume()       — set 0–100 volume
-├── trackAudioLevel()      — update audio level map for AI detection
-└── getActiveSpeaker()     — return slot with highest recent audio level
-```
-
-### OBSWebSocketService (`backend/src/services/OBSWebSocketService.js`)
-
-Full PRISM Live Studio control via OBS WebSocket v5 protocol.
-
-```
-OBSWebSocketService
-├── connect()              — connect to OBS WebSocket
-├── setCurrentScene()      — switch program scene
-├── setPreviewScene()      — set Studio Mode preview
-├── createGuestScene()     — create scene + browser source for guest
-├── createGridScene()      — create responsive NxN grid scene
-├── muteSource()           — toggle audio source mute
-├── setSourceVolume()      — set dB volume
-├── startStreaming()       — start RTMP stream
-├── stopStreaming()        — stop stream
-├── toggleStudioMode()     — enable/disable preview/program workflow
-└── getStats()             — CPU, memory, dropped frames
-```
-
-### SmartDirectorService (`backend/src/services/SmartDirectorService.js`)
-
-AI-driven scene switching with configurable sensitivity.
-
-```
-SmartDirectorService
-├── startSession()         — begin auto-switching for a room
-├── stopSession()          — end session and clear interval
-├── analyzeAndSwitch()     — check audio levels → switch if threshold met
-├── switchToSpeaker()      — execute OBS scene switch + log event
-├── manualOverride()       — switch manually, pause AI for 5s
-└── getStats()             — total/auto/manual switches + history
-```
-
-**Configuration options:**
-
-| Option | Default | Description |
+| Service | File | Responsibility |
 |---|---|---|
-| `switchDelay` | 1000ms | Minimum time between switches |
-| `holdTime` | 3000ms | Speaker must hold audio for this long |
-| `silenceThreshold` | 20 | Audio level below = silence |
-| `confidenceThreshold` | 0.7 | Required confidence for auto-switch |
-
-### TranscriptionService (`backend/src/services/TranscriptionService.js`)
-
-Real-time Whisper transcription with GPT-4 translation pipeline.
-
-```
-TranscriptionService
-├── startSession()         — initialize stream transcription
-├── transcribeChunk()      — POST audio to Whisper, optionally translate
-├── translateText()        — GPT-4 translation to target language
-├── getCurrentCaption()    — latest caption + recent history
-├── generateSubtitleHTML() — HTML overlay page for PRISM browser source
-├── exportSRT()            — generate SRT file from all segments
-└── getStats()             — duration, segments, avg confidence
-```
+| VDONinjaService | `services/VDONinjaService.js` | Room creation, webhook execution, audio level tracking |
+| OBSWebSocketService | `services/OBSWebSocketService.js` | PRISM scene/audio/streaming control via obs-websocket-js |
+| SmartDirectorService | `services/SmartDirectorService.js` | AI speaker detection loop, scene switching, manual override |
+| TranscriptionService | `services/TranscriptionService.js` | Whisper transcription, GPT-4 translation, SRT export, HTML overlay |
+| AIService | `services/AIService.js` | OpenAI Moderation API + Ollama chat |
+| HITLService | `services/HITLService.js` | Review queue management, ground truth storage |
+| MonitoringService | `services/MonitoringService.js` | Model drift detection, accuracy tracking |
+| PRISMService | `services/PRISMService.js` | Mobile QR setup |
+| EVMuxService | `services/EVMuxService.js` | Cloud multi-platform streaming |
 
 ---
 
 ## n8n Automation
 
-Pre-built workflow templates in `n8n-workflows/`:
+Workflow templates in `n8n-workflows/`. See `n8n-workflows/README.md` for full setup.
 
-### auto-scene-switch.json
-Polls `/smart-director/stats/:roomId` every 2 seconds and switches OBS scenes automatically. Logs all switches to a Google Sheet or Postgres.
+**Install n8n:**
+```bash
+docker run -it --rm --name n8n -p 5678:5678 -v ~/.n8n:/home/node/.n8n n8nio/n8n
+```
+Open http://localhost:5678, import JSON files via **Workflows → Import from File**.
 
-### guest-auto-mute.json
-Webhook receiver — mutes a guest slot when called from external triggers (audience voting, chat commands, etc.).
+| Workflow | File | Trigger | Action |
+|---|---|---|---|
+| Auto Scene Switch | `auto-scene-switch.json` | Every 2s | Polls active speaker, switches OBS scene, logs to DB |
+| Guest Auto-Mute | `guest-auto-mute.json` | Webhook | Mutes guest slot via VDO.Ninja API |
 
-### Setup
-
-1. Import JSON files into your n8n instance
-2. Set `SWANYTHREE_API_URL` and `JWT_TOKEN` credentials in n8n
-3. Activate the workflows
-
-See `n8n-workflows/README.md` for full setup instructions.
+Set credentials in n8n: `SWANYTHREE_API_URL` and `JWT_TOKEN`.
 
 ---
 
@@ -463,30 +431,54 @@ Chat message
     ▼
 OpenAI Moderation API
     │
-    ├── confidence ≥ 0.8 ──► Auto-action (allow/remove)
+    ├── confidence ≥ 0.8 ──► Auto action (allow / remove)
     │
     └── confidence < 0.8 ──► HITL Queue
                                   │
-                             Human Review
+                             Human Review (/hitl)
                                   │
-                             Ground Truth Stored
-                                  │
-                             Model Retraining Dataset
+                             Ground Truth → model_metrics
 ```
+
+Model monitoring tracks: total predictions · avg confidence · accuracy vs ground truth · low-confidence rate · drift alert at >10% accuracy drop.
 
 ---
 
-## Model Monitoring
+## Troubleshooting
 
-The platform tracks AI performance in real time:
+**PostgreSQL not starting**
+```bash
+docker-compose down && docker volume rm pub_postgres_data && docker-compose up -d
+```
 
-| Metric | Description |
-|---|---|
-| Total Predictions | Overall model invocations |
-| Average Confidence | Rolling mean certainty score |
-| Accuracy | Correct decisions vs human ground truth |
-| Low Confidence Rate | % of messages requiring human review |
-| Drift Alert | Triggered when accuracy drops >10% from baseline |
+**Backend connection error**
+```bash
+docker logs swanythree-backend
+docker-compose restart backend
+```
+
+**OBS WebSocket not connecting**
+- Confirm PRISM is running with WebSocket enabled (Tools → WebSocket Server Settings)
+- Check `OBS_WEBSOCKET_HOST` and `OBS_WEBSOCKET_PASSWORD` in `.env`
+- Backend logs show `⚠️ OBS WebSocket not available` if unreachable — all other features still work
+
+**Ollama model missing**
+```bash
+docker exec swanythree-ollama ollama list
+docker exec swanythree-ollama ollama pull ministral-3b
+```
+
+**Frontend not loading**
+```bash
+curl http://localhost:3000/health   # verify backend first
+docker-compose restart frontend
+```
+
+**Stop all services**
+```bash
+docker-compose down          # stop containers
+docker-compose down -v       # stop + delete volumes
+```
 
 ---
 
@@ -500,43 +492,34 @@ The platform tracks AI performance in real time:
 
 ---
 
-## Success Metrics
+## Supplementary Docs
 
-### Business KPIs
-- User retention target: 25–30% at 90 days
-- Moderation time reduction: 70% vs manual
-- Multi-platform reach: 3× increase
-
-### AI Performance
-- Moderation accuracy: >90%
-- HITL review rate: <20% of messages
-- Transcription latency: <2 seconds
-- Scene switch response: <500ms
-
-### Infrastructure
-- API p99 latency: <2 seconds
-- WebSocket uptime: >99.9%
-- DB query time: <100ms
+| File | Purpose |
+|---|---|
+| `INTEGRATION_GUIDE.md` | Deep-dive: VDO.Ninja API, OBS WebSocket, Smart Director, Transcription, n8n |
+| `PRODUCTION_QUICKSTART.md` | 10-minute guide: PRISM setup → room → AI Director → transcription overlay |
+| `QUICK_START.md` | 5-minute Docker start for first-time setup |
+| `n8n-workflows/README.md` | n8n setup, workflow details, API credential config |
 
 ---
 
-## Development
+## Development (without Docker)
 
 ```bash
-# Backend
+# Terminal 1
 cd backend && npm install && npm run dev
 
-# Frontend
+# Terminal 2
 cd frontend && npm install && npm run dev
+
+# Terminal 3 (database only)
+docker-compose up postgres ollama
 ```
 
 ---
 
 ## License
 
-MIT
-
----
-
-Built with the 8-step AI MVP framework for production-ready streaming systems.
-VDO.Ninja + PRISM Live Studio integration based on the SwanyThree Ultimate whitepaper.
+MIT — Built on the 8-step AI MVP framework.  
+VDO.Ninja + PRISM integration based on the SwanyThree Ultimate whitepaper.  
+SeeWhy LIVE UI derived from 17 production broadcast screenshots.

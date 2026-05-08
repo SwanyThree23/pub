@@ -9,6 +9,7 @@ import Login from './components/Login';
 import ProductionControl from './components/ProductionControl';
 import SmartDirector from './components/SmartDirector';
 import TranscriptionPanel from './components/TranscriptionPanel';
+import SeeWhyLIVE from './components/SeeWhyLIVE';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -94,6 +95,11 @@ function App() {
             path="/transcription"
             element={user ? <TranscriptionPanel token={token} /> : <Navigate to="/login" />}
           />
+
+          <Route
+            path="/seewhy"
+            element={user ? <SeeWhyLIVE /> : <Navigate to="/login" />}
+          />
         </Routes>
       </div>
     </Router>
@@ -111,6 +117,7 @@ const Navigation = ({ onLogout, user }) => (
             <NavLink to="/production">Production</NavLink>
             <NavLink to="/smart-director">AI Director</NavLink>
             <NavLink to="/transcription">Transcription</NavLink>
+            <NavLink to="/seewhy">SeeWhy LIVE</NavLink>
             <NavLink to="/hitl">HITL</NavLink>
             <NavLink to="/analytics">Analytics</NavLink>
             {user?.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
