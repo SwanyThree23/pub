@@ -1,0 +1,108 @@
+{
+  "name": "VDO.Ninja Auto Scene Switch",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 2
+            }
+          ]
+        }
+      },
+      "name": "Every 2 Seconds",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/vdo/room/{{$json.roomId}}/active-speaker",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Get Active Speaker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.activeSpeaker}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Speaker Detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/obs/scene/current",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "sceneName",
+              "value": "Guest_{{$json.activeSpeaker}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Switch OBS Scene",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "scene_switches",
+        "columns": "room_id, guest_slot, switched_at",
+        "additionalFields": {}
+      },
+      "name": "Log Switch",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1050, 200],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "SwanyThree DB"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 Seconds": {
+      "main": [[{"node": "Get Active Speaker", "type": "main", "index": 0}]]
+    },
+    "Get Active Speaker": {
+      "main": [[{"node": "Speaker Detected?", "type": "main", "index": 0}]]
+    },
+    "Speaker Detected?": {
+      "main": [[{"node": "Switch OBS Scene", "type": "main", "index": 0}], []]
+    },
+    "Switch OBS Scene": {
+      "main": [[{"node": "Log Switch", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T00:00:00.000Z",
+  "versionId": "1"
+}

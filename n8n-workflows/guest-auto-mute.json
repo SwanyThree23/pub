@@ -1,0 +1,92 @@
+{
+  "name": "VDO.Ninja Guest Auto Mute",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "vdo-mute",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "vdo-mute-webhook"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/vdo/room/{{$json.body.roomId}}/guest/{{$json.body.guestSlot}}/mute",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": false,
+        "options": {}
+      },
+      "name": "Mute VDO.Ninja Guest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/obs/audio/mute",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "sourceName",
+              "value": "VDO_Guest_{{$json.body.guestSlot}}"
+            },
+            {
+              "name": "muted",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Mute in OBS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "success",
+              "value": "true"
+            },
+            {
+              "name": "message",
+              "value": "Guest {{$json.body.guestSlot}} muted successfully"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Mute VDO.Ninja Guest", "type": "main", "index": 0}]]
+    },
+    "Mute VDO.Ninja Guest": {
+      "main": [[{"node": "Mute in OBS", "type": "main", "index": 0}]]
+    },
+    "Mute in OBS": {
+      "main": [[{"node": "Response", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-15T00:00:00.000Z",
+  "versionId": "1"
+}
